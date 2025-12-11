@@ -132,6 +132,56 @@ export function ParentDashboard() {
         </p>
       </div>
 
+      {/* SCREENING BUTTON - VERY PROMINENT, RIGHT AFTER QR SCAN */}
+      <div 
+        style={{ 
+          backgroundColor: '#3b82f6', 
+          padding: '20px', 
+          borderRadius: '12px', 
+          marginBottom: '24px',
+          boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+          position: 'relative',
+          zIndex: 1000,
+          border: '3px solid #2563eb'
+        }}
+      >
+        <button
+          onClick={() => {
+            console.log('Screening button clicked!');
+            router.push('/screening/wizard');
+          }}
+          style={{
+            width: '100%',
+            padding: '20px',
+            backgroundColor: '#ffffff',
+            color: '#3b82f6',
+            border: '3px solid #ffffff',
+            borderRadius: '8px',
+            fontSize: '20px',
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '12px',
+            minHeight: '60px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+          }}
+        >
+          <Stethoscope style={{ width: '28px', height: '28px' }} />
+          <span>🏥 START PEDIATRIC DEVELOPMENTAL SCREENING</span>
+        </button>
+        <p style={{ 
+          textAlign: 'center', 
+          color: '#dbeafe', 
+          fontSize: '14px', 
+          marginTop: '12px',
+          fontWeight: '500'
+        }}>
+          Complete a simplified Denver II screening to assess your child&apos;s developmental milestones
+        </p>
+      </div>
+
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <h1 className="text-2xl sm:text-3xl font-bold">Parent Dashboard</h1>
         <div className="flex gap-2">
@@ -145,29 +195,6 @@ export function ParentDashboard() {
           </Button>
         </div>
       </div>
-
-      {/* Screening Wizard Card */}
-      <Card className="border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Stethoscope className="h-5 w-5 text-blue-600" />
-            Pediatric Developmental Screening
-          </CardTitle>
-          <CardDescription>
-            Complete a simplified Denver II screening to assess your child's developmental milestones
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button
-            onClick={() => router.push('/screening/wizard')}
-            size="lg"
-            className="w-full bg-blue-600 hover:bg-blue-700"
-          >
-            <Stethoscope className="mr-2 h-5 w-5" />
-            Start Screening Wizard
-          </Button>
-        </CardContent>
-      </Card>
 
       {/* Quick Actions Card */}
       <Card className="border-teal-200">
