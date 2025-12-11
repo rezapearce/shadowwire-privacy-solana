@@ -7,9 +7,13 @@ import { signWithMPC } from '@/lib/zenrock/mpc';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { ClinicPaymentModal } from '@/components/dashboard/ClinicPaymentModal';
+import { UnifiedActivityList } from '@/components/dashboard/UnifiedActivityList';
+import { WalletFaucet } from '@/components/dashboard/WalletFaucet';
+import { WalletConnectButton } from '@/components/dashboard/WalletConnectButton';
 
 export function ParentDashboard() {
-  const { wallet, transactions, approveTransaction, rejectTransaction, setUser } = useFamilyStore();
+  const { wallet, transactions, approveTransaction, rejectTransaction, setUser, currentUser } = useFamilyStore();
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
 
   const totalFamilyValue = wallet.sol + wallet.usdc + wallet.zenzec;
@@ -67,16 +71,25 @@ export function ParentDashboard() {
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Parent Dashboard</h1>
-        <Button onClick={handleLogout} variant="outline">
-          Logout
-        </Button>
+        <div className="flex gap-2">
+          <WalletConnectButton />
+          <ClinicPaymentModal />
+          <Button onClick={handleLogout} variant="outline">
+            Logout
+          </Button>
+        </div>
       </div>
       
       {/* Total Family Value */}
       <Card>
         <CardHeader>
-          <CardTitle>Total Family Value</CardTitle>
-          <CardDescription>Combined wallet balance</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Total Family Value</CardTitle>
+              <CardDescription>Combined wallet balance</CardDescription>
+            </div>
+            <WalletFaucet />
+          </div>
         </CardHeader>
         <CardContent>
           <div className="text-4xl font-bold">
@@ -162,6 +175,11 @@ export function ParentDashboard() {
           )}
         </CardContent>
       </Card>
+
+      {/* Unified Transaction History */}
+      {currentUser?.familyId && (
+        <UnifiedActivityList familyId={currentUser.familyId} />
+      )}
     </div>
   );
 }

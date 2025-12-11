@@ -11,7 +11,9 @@
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-slot": "^1.2.4",
+    "@radix-ui/react-tooltip": "^1.2.8",
     "@solana/wallet-adapter-base": "^0.9.27",
+    "@solana/wallet-adapter-phantom": "^0.9.28",
     "@solana/wallet-adapter-react": "^0.15.39",
     "@solana/wallet-adapter-react-ui": "^0.9.39",
     "@solana/wallet-adapter-wallets": "^0.19.37",
