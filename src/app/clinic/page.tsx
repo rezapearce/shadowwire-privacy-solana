@@ -1,13 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Lock, Shield, Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Lock, Shield, Loader2, ExternalLink } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { getClinicReceipts, ClinicReceipt } from '@/app/actions/getClinicData';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 export default function ClinicPage() {
+  const router = useRouter();
   const [receipts, setReceipts] = useState<ClinicReceipt[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +76,47 @@ export default function ClinicPage() {
       .split('_')
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
       .join(' ');
+  };
+
+  /**
+   * Extract screening ID from memo text
+   * Handles patterns like:
+   * - "Screening #123..." (with UUID)
+   * - Full UUID strings
+   * - "Screening [UUID]"
+   */
+  const extractScreeningId = (memo: string): string | null => {
+    if (!memo) return null;
+
+    // Try to find a UUID pattern in the memo
+    const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+    const uuidMatch = memo.match(uuidRegex);
+    if (uuidMatch) {
+      return uuidMatch[0];
+    }
+
+    // Check if memo contains "Screening" keyword (case-insensitive)
+    const screeningPattern = /screening/i;
+    if (screeningPattern.test(memo)) {
+      // Try to extract any ID-like pattern after "Screening"
+      const afterScreening = memo.split(/screening/i)[1];
+      if (afterScreening) {
+        // Look for UUID in the part after "Screening"
+        const afterUuidMatch = afterScreening.match(uuidRegex);
+        if (afterUuidMatch) {
+          return afterUuidMatch[0];
+        }
+      }
+    }
+
+    return null;
+  };
+
+  const handleMemoClick = (memo: string) => {
+    const screeningId = extractScreeningId(memo);
+    if (screeningId) {
+      router.push(`/clinic/report/${screeningId}`);
+    }
   };
 
   return (
@@ -194,7 +238,22 @@ export default function ClinicPage() {
                         </div>
                       </td>
                       <td className="py-3 px-4">
-                        <span className="text-sm font-medium">{receipt.memo}</span>
+                        {extractScreeningId(receipt.memo) ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium">{receipt.memo}</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleMemoClick(receipt.memo)}
+                              className="h-7 px-2 text-teal-600 hover:text-teal-700 hover:bg-teal-50"
+                            >
+                              <ExternalLink className="h-3 w-3 mr-1" />
+                              View Report
+                            </Button>
+                          </div>
+                        ) : (
+                          <span className="text-sm font-medium">{receipt.memo}</span>
+                        )}
                       </td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
