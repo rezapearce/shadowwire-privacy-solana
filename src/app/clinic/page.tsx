@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Lock, Shield, Loader2 } from 'lucide-react';
-import { QRCodeSVG } from 'react-qr-code';
+import QRCode from 'react-qr-code';
 import { getClinicReceipts, ClinicReceipt } from '@/app/actions/getClinicData';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -136,7 +136,7 @@ export default function ClinicPage() {
         <CardContent>
           <div className="flex flex-col items-center justify-center py-6">
             <div className="p-4 bg-white rounded-lg border-2 border-teal-200">
-              <QRCodeSVG
+              <QRCode
                 value="00000000-0000-0000-0000-000000000001"
                 size={200}
                 level="M"

@@ -75,31 +75,101 @@ export function ParentDashboard() {
     setIsPaymentModalOpen(true);
   };
 
+  // Debug: Log that component is rendering
+  console.log('ParentDashboard rendering - Scan button should be visible');
+
   return (
     <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold">Parent Dashboard</h1>
+      {/* VERY VISIBLE SCAN BUTTON - Using inline styles to ensure it shows */}
+      <div 
+        style={{ 
+          backgroundColor: '#0d9488', 
+          padding: '20px', 
+          borderRadius: '12px', 
+          marginBottom: '24px',
+          boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+          position: 'relative',
+          zIndex: 1000
+        }}
+      >
+        <button
+          onClick={() => {
+            console.log('Scan button clicked!');
+            setIsScannerOpen(true);
+          }}
+          style={{
+            width: '100%',
+            padding: '20px',
+            backgroundColor: '#ffffff',
+            color: '#0d9488',
+            border: '3px solid #ffffff',
+            borderRadius: '8px',
+            fontSize: '20px',
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '12px',
+            minHeight: '60px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+          }}
+        >
+          <QrCode style={{ width: '28px', height: '28px' }} />
+          <span>📱 SCAN QR CODE TO PAY</span>
+        </button>
+        <p style={{ 
+          textAlign: 'center', 
+          color: '#ccfbf1', 
+          fontSize: '14px', 
+          marginTop: '12px',
+          fontWeight: '500'
+        }}>
+          Point your camera at the clinic&apos;s QR code
+        </p>
+      </div>
+
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <h1 className="text-2xl sm:text-3xl font-bold">Parent Dashboard</h1>
         <div className="flex gap-2">
           <WalletConnectButton />
-          <Button
-            onClick={() => setIsScannerOpen(true)}
+          <Button 
+            onClick={handleLogout} 
             variant="outline"
-            className="flex items-center gap-2"
+            className="hidden sm:inline-flex"
           >
-            <QrCode className="h-4 w-4" />
-            Scan
-          </Button>
-          <Button
-            onClick={() => setIsPaymentModalOpen(true)}
-            variant="default"
-          >
-            Pay Clinic
-          </Button>
-          <Button onClick={handleLogout} variant="outline">
             Logout
           </Button>
         </div>
       </div>
+
+      {/* Quick Actions Card */}
+      <Card className="border-teal-200">
+        <CardHeader>
+          <CardTitle className="text-lg">Quick Actions</CardTitle>
+          <CardDescription>Other payment options</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Button
+              onClick={() => setIsPaymentModalOpen(true)}
+              variant="outline"
+              size="lg"
+              className="w-full sm:w-auto"
+            >
+              Pay Clinic Directly
+            </Button>
+            <Button 
+              onClick={handleLogout} 
+              variant="outline"
+              size="lg"
+              className="w-full sm:hidden"
+            >
+              Logout
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
       
       {/* Modals */}
       <ScannerModal
