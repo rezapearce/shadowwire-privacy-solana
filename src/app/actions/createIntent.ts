@@ -66,13 +66,10 @@ export async function createPaymentIntent(
       input_tx_ref: txHash || null,
     };
     
-    // Include screening_id in payment memo/description if provided
-    // Note: This assumes payment_intents table has a way to store metadata
-    // If not, we'll log it for clinic reference
+    // Store screening_id if provided (for memo generation in clinic receipts)
     if (screeningId) {
+      insertData.screening_id = screeningId;
       console.log(`Payment intent created for screening review: ${screeningId}`);
-      // Store screening_id in failure_reason field temporarily as memo (if no dedicated field exists)
-      // Or add a metadata JSONB field to payment_intents table in future
     }
     
     console.log(`Creating payment intent with data:`, {

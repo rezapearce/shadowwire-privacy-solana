@@ -80,33 +80,26 @@ export default function ClinicPage() {
 
   /**
    * Extract screening ID from memo text
-   * Handles patterns like:
-   * - "Screening #123..." (with UUID)
-   * - Full UUID strings
-   * - "Screening [UUID]"
+   * Handles the format: "Screening: {UUID}"
    */
   const extractScreeningId = (memo: string): string | null => {
     if (!memo) return null;
 
-    // Try to find a UUID pattern in the memo
+    // Primary check: Look for "Screening: " prefix format
+    if (memo.startsWith('Screening: ')) {
+      const id = memo.split('Screening: ')[1];
+      // Validate it's a UUID format
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (uuidRegex.test(id.trim())) {
+        return id.trim();
+      }
+    }
+
+    // Fallback: Try to find a UUID pattern anywhere in the memo
     const uuidRegex = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
     const uuidMatch = memo.match(uuidRegex);
     if (uuidMatch) {
       return uuidMatch[0];
-    }
-
-    // Check if memo contains "Screening" keyword (case-insensitive)
-    const screeningPattern = /screening/i;
-    if (screeningPattern.test(memo)) {
-      // Try to extract any ID-like pattern after "Screening"
-      const afterScreening = memo.split(/screening/i)[1];
-      if (afterScreening) {
-        // Look for UUID in the part after "Screening"
-        const afterUuidMatch = afterScreening.match(uuidRegex);
-        if (afterUuidMatch) {
-          return afterUuidMatch[0];
-        }
-      }
     }
 
     return null;

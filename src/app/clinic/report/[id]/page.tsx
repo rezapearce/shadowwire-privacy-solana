@@ -257,15 +257,15 @@ export default function ClinicalReportPage() {
 
       {/* Privacy Footer */}
       <Card className="border-teal-200 bg-teal-50/50">
-        <CardContent className="pt-6">
+        <CardContent className="pt-6 pb-6">
           <div className="flex items-start gap-3">
-            <Shield className="h-5 w-5 text-teal-600 mt-0.5" />
-            <div>
-              <p className="text-sm font-medium text-teal-900 mb-1">
-                Privacy Notice
+            <Shield className="h-5 w-5 text-teal-600 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-teal-900 mb-2">
+                Privacy Note
               </p>
-              <p className="text-sm text-teal-700">
-                This record was accessed via Zcash-shielded payment. Parent identity remains anonymous.
+              <p className="text-sm text-teal-700 leading-relaxed">
+                This clinical record was accessed via Zcash-shielded payment. Parent identity, wallet address, and financial information remain anonymous and are not visible to clinic staff.
               </p>
             </div>
           </div>

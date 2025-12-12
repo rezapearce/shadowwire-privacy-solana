@@ -20,7 +20,10 @@ BEGIN
     pi.fiat_amount AS amount,
     'ZEC'::TEXT AS asset,  -- Default to ZEC since settlement_asset column doesn't exist
     pi.status::TEXT AS status,
-    ('Medical Service #' || RIGHT(pi.intent_id::TEXT, 4))::TEXT AS memo
+    CASE 
+      WHEN pi.screening_id IS NOT NULL THEN ('Screening: ' || pi.screening_id::TEXT)::TEXT
+      ELSE ('Medical Service #' || RIGHT(pi.intent_id::TEXT, 4))::TEXT
+    END AS memo
   FROM payment_intents pi
   WHERE pi.clinic_id = target_clinic_id
     AND pi.status = 'SETTLED'

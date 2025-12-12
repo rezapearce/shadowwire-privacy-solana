@@ -135,6 +135,15 @@ export function ScreeningWizard() {
     await new Promise((resolve) => setTimeout(resolve, 2500));
 
     try {
+      // Log submission attempt
+      console.log('=== SCREENING SUBMISSION START ===');
+      console.log('Family ID:', currentUser.familyId);
+      console.log('Child Name:', childName.trim());
+      console.log('Age:', Number(age));
+      console.log('Answers count:', answers.size);
+      console.log('Answers:', Array.from(answers.entries()));
+      
+      // 1. Call Server Action
       const result = await submitScreening(
         currentUser.familyId,
         childName.trim(),
@@ -142,17 +151,44 @@ export function ScreeningWizard() {
         answers
       );
 
-      if (!result.success || !result.screening_id || !result.risk_level) {
-        throw new Error(result.error || 'Failed to submit screening');
-      }
+      console.log('=== SUBMISSION RESULT ===');
+      console.log('Result object:', result);
+      console.log('Success:', result?.success);
+      console.log('Screening ID:', result?.screening_id);
+      console.log('Risk Level:', result?.risk_level);
+      console.log('Error:', result?.error);
 
-      setScreeningId(result.screening_id);
-      setRiskLevel(result.risk_level);
-      setStep('results');
-      toast.success('Screening analysis complete!');
+      // 2. Check result and SAVE THE ID
+      if (result && result.success && result.screening_id) {
+        console.log('✅ Screening submitted successfully!');
+        setScreeningId(result.screening_id);
+        setRiskLevel(result.risk_level);
+        
+        // 3. FORCE NAVIGATION TO RESULT VIEW
+        setStep('results');
+        toast.success('Screening analysis complete!');
+      } else {
+        const errorMsg = result?.error || 'Failed to submit screening - no error message provided';
+        console.error('❌ Submission failed:', errorMsg);
+        console.error('Full result:', JSON.stringify(result, null, 2));
+        throw new Error(errorMsg);
+      }
     } catch (error) {
-      console.error('Error submitting screening:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to submit screening');
+      console.error('=== ERROR IN SUBMISSION HANDLER ===');
+      console.error('Error type:', typeof error);
+      console.error('Error:', error);
+      console.error('Error message:', error instanceof Error ? error.message : String(error));
+      console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+      
+      const errorMessage = error instanceof Error ? error.message : 'Failed to submit screening';
+      
+      // Show detailed error toast
+      toast.error('Screening Submission Failed', {
+        description: errorMessage,
+        duration: 10000, // Longer duration to ensure user sees it
+      });
+      
+      // Keep user on questions page so they can try again
       setStep('questions');
     }
   };
@@ -300,6 +336,12 @@ export function ScreeningWizard() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="flex items-center justify-center mb-2">
+                  <Badge variant="destructive" className="text-base px-4 py-2">
+                    <AlertCircle className="h-4 w-4 mr-2" />
+                    High Risk
+                  </Badge>
+                </div>
                 <div className="p-4 bg-white rounded-lg border border-red-200">
                   <p className="text-sm text-muted-foreground mb-2">Screening ID:</p>
                   <p className="font-mono text-xs break-all">{screeningId}</p>
@@ -309,7 +351,7 @@ export function ScreeningWizard() {
                   className="w-full bg-red-600 hover:bg-red-700"
                   size="lg"
                 >
-                  Pay Dr. Smith (Shielded)
+                  Consult Specialist (Private)
                 </Button>
                 <p className="text-xs text-muted-foreground text-center">
                   Your payment will be processed privately and securely

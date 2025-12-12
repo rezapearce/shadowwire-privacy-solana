@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useFamilyStore } from '@/store/useFamilyStore';
-import { getFamilyScreeningSessionsAction } from '@/app/actions/screeningActions';
+import { getFamilyScreenings } from '@/app/actions/submitScreening';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -29,9 +29,12 @@ export function ScreeningHistory() {
 
     const fetchSessions = async () => {
       try {
-        const result = await getFamilyScreeningSessionsAction(currentUser.familyId);
-        if (result.success && result.sessions) {
-          setSessions(result.sessions);
+        const result = await getFamilyScreenings(currentUser.familyId);
+        console.log('Screening history fetch result:', result);
+        if (result.success && result.screenings) {
+          setSessions(result.screenings);
+        } else {
+          console.error('Failed to fetch screenings:', result.error);
         }
       } catch (error) {
         console.error('Error fetching screening sessions:', error);
@@ -79,23 +82,40 @@ export function ScreeningHistory() {
           </div>
         ) : (
           <div className="space-y-3">
-            {sessions.map((session) => (
+            {sessions.map((screening) => (
               <Card
-                key={session.session_id}
+                key={screening.id}
                 className="cursor-pointer hover:bg-muted/50 transition-colors"
-                onClick={() => router.push(`/screening/results?sessionId=${session.session_id}`)}
+                onClick={() => {
+                  // Navigate to clinic report if payment was made, otherwise show results
+                  if (screening.status === 'PAID' || screening.status === 'SETTLED') {
+                    router.push(`/clinic/report/${screening.id}`);
+                  } else {
+                    // For now, just show the screening ID - could create a results page later
+                    router.push(`/screening/wizard`);
+                  }
+                }}
               >
                 <CardContent className="pt-6">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
-                        <h3 className="font-semibold">{session.child_name}</h3>
-                        <Badge className={statusColors[session.status] || 'bg-gray-100 text-gray-800'}>
-                          {session.status.replace('_', ' ')}
+                        <h3 className="font-semibold">{screening.child_name}</h3>
+                        <Badge 
+                          variant={screening.risk_level === 'High' ? 'destructive' : 'default'}
+                          className={statusColors[screening.status] || 'bg-gray-100 text-gray-800'}
+                        >
+                          {screening.risk_level} Risk
+                        </Badge>
+                        <Badge variant="outline" className="text-xs">
+                          {screening.status?.replace('_', ' ') || 'Pending'}
                         </Badge>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        Age: {session.child_age_months} months • {new Date(session.created_at).toLocaleDateString()}
+                        Age: {screening.child_age_months} months • {new Date(screening.created_at).toLocaleDateString()}
+                        {screening.risk_score !== null && (
+                          <span className="ml-2">• Risk Score: {screening.risk_score}/100</span>
+                        )}
                       </p>
                     </div>
                     <Button variant="ghost" size="icon">

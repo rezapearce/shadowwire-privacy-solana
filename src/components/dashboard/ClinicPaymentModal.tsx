@@ -484,9 +484,17 @@ export function ClinicPaymentModal({ isOpen: controlledIsOpen, onOpenChange, scr
           <DialogTitle>Pay Clinic</DialogTitle>
           <DialogDescription>
             {screeningId 
-              ? `Make a payment for screening review (ID: ${screeningId.substring(0, 8)}...). The payment will be automatically routed and shielded.`
+              ? `Make a payment for screening review. The payment will be automatically routed and shielded.`
               : 'Make a payment to a clinic. The payment will be automatically routed and shielded.'}
           </DialogDescription>
+          {screeningId && (
+            <div className="mt-2 p-3 bg-muted rounded-md">
+              <p className="text-sm font-medium mb-1">Payment Memo:</p>
+              <p className="text-sm font-mono text-muted-foreground">
+                Screening: {screeningId}
+              </p>
+            </div>
+          )}
         </DialogHeader>
 
         <form onSubmit={handleSubmit}>
@@ -607,11 +615,31 @@ export function ClinicPaymentModal({ isOpen: controlledIsOpen, onOpenChange, scr
 
             {/* Status Display */}
             {isProcessing && currentStatus && (
-              <div className="flex items-center gap-2 p-3 bg-muted rounded-md">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span className="text-sm">
-                  {STATUS_MESSAGES[currentStatus]}
-                </span>
+              <div className={`flex flex-col gap-2 p-4 rounded-md border-2 ${
+                currentStatus === 'SHIELDING' 
+                  ? 'bg-teal-50 border-teal-300' 
+                  : 'bg-muted border-border'
+              }`}>
+                <div className="flex items-center gap-2">
+                  <Loader2 className={`h-5 w-5 animate-spin ${
+                    currentStatus === 'SHIELDING' ? 'text-teal-600' : ''
+                  }`} />
+                  <span className={`text-sm font-medium ${
+                    currentStatus === 'SHIELDING' ? 'text-teal-900' : ''
+                  }`}>
+                    {STATUS_MESSAGES[currentStatus]}
+                  </span>
+                </div>
+                {currentStatus === 'SHIELDING' && (
+                  <div className="ml-7 space-y-1">
+                    <p className="text-xs text-teal-700">
+                      🛡️ Your payment is being shielded for privacy...
+                    </p>
+                    <p className="text-xs text-teal-600">
+                      Parent identity and wallet information will remain anonymous
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>
