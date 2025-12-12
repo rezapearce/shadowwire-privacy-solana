@@ -17,6 +17,10 @@ export interface ClinicalReport {
   ai_summary: string | null;
   answers: ScreeningAnswer[];
   created_at: string;
+  clinical_notes: string | null;
+  clinical_risk_level: 'LOW' | 'MODERATE' | 'HIGH' | null;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
 }
 
 /**
@@ -91,6 +95,10 @@ export async function getClinicalReport(screeningId: string): Promise<{
       ai_summary: data.ai_summary || null,
       answers: transformedAnswers,
       created_at: data.created_at || new Date().toISOString(),
+      clinical_notes: data.clinical_notes || null,
+      clinical_risk_level: data.clinical_risk_level || null,
+      reviewed_at: data.reviewed_at || null,
+      reviewed_by: data.reviewed_by || null,
     };
 
     return {

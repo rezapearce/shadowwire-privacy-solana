@@ -2,11 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Loader2, ArrowLeft, Shield, User, FileText, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Loader2, ArrowLeft, Shield, User, FileText, AlertCircle, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { getClinicalReport, ClinicalReport } from '@/app/actions/getClinicalReport';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ClinicalAssessmentForm } from '@/components/clinic/ClinicalAssessmentForm';
 
 export default function ClinicalReportPage() {
   const params = useParams();
@@ -73,6 +74,30 @@ export default function ClinicalReportPage() {
 
   const getShortId = (uuid: string): string => {
     return uuid.substring(0, 8).toUpperCase();
+  };
+
+  const getClinicalRiskLevelColor = (level: 'LOW' | 'MODERATE' | 'HIGH' | null) => {
+    if (!level) return '';
+    switch (level) {
+      case 'LOW':
+        return 'bg-green-100 text-green-800 border-green-300';
+      case 'MODERATE':
+        return 'bg-yellow-100 text-yellow-800 border-yellow-300';
+      case 'HIGH':
+        return 'bg-red-100 text-red-800 border-red-300';
+    }
+  };
+
+  const getClinicalRiskLevelIcon = (level: 'LOW' | 'MODERATE' | 'HIGH' | null) => {
+    if (!level) return null;
+    switch (level) {
+      case 'LOW':
+        return <CheckCircle2 className="h-4 w-4" />;
+      case 'MODERATE':
+        return <AlertTriangle className="h-4 w-4" />;
+      case 'HIGH':
+        return <AlertCircle className="h-4 w-4" />;
+    }
   };
 
   if (loading) {
@@ -266,6 +291,51 @@ export default function ClinicalReportPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Clinical Assessment Section */}
+      {!report.reviewed_at ? (
+        <ClinicalAssessmentForm screeningId={screeningId} />
+      ) : (
+        <Card className="border-teal-200">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-teal-900">
+              <CheckCircle2 className="h-5 w-5 text-green-600" />
+              Review Completed
+            </CardTitle>
+            <CardDescription>
+              Clinical assessment finalized on {formatDate(report.reviewed_at)}
+              {report.reviewed_by && ` by ${report.reviewed_by}`}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Final Clinical Risk Level */}
+            {report.clinical_risk_level && (
+              <div>
+                <p className="text-sm text-muted-foreground mb-2">Final Clinical Risk Assessment</p>
+                <Badge 
+                  className={`text-base px-4 py-2 ${getClinicalRiskLevelColor(report.clinical_risk_level)}`}
+                >
+                  {getClinicalRiskLevelIcon(report.clinical_risk_level)}
+                  <span className="ml-2">{report.clinical_risk_level}</span>
+                </Badge>
+              </div>
+            )}
+
+            {/* Clinical Notes */}
+            {report.clinical_notes && (
+              <div className="pt-4 border-t">
+                <p className="text-sm font-semibold text-teal-900 mb-2 flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Clinical Notes & Recommendations
+                </p>
+                <p className="text-sm leading-relaxed text-gray-700 whitespace-pre-wrap">
+                  {report.clinical_notes}
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Privacy Footer */}
       <Card className="border-teal-200 bg-teal-50/50">

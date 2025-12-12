@@ -318,7 +318,7 @@ export async function getFamilyScreenings(
     
     const { data, error } = await db
       .from('screenings')
-      .select('id, child_name, child_age_months, ai_risk_score, status, created_at')
+      .select('id, child_name, child_age_months, ai_risk_score, ai_summary, status, created_at, clinical_notes, clinical_risk_level, reviewed_at, reviewed_by')
       .eq('family_id', familyId)
       .order('created_at', { ascending: false });
 
@@ -339,6 +339,11 @@ export async function getFamilyScreenings(
       risk_level: screening.ai_risk_score && screening.ai_risk_score >= 50 ? 'High' : 'Low',
       status: screening.status || 'PENDING_REVIEW',
       created_at: screening.created_at,
+      ai_summary: screening.ai_summary || null,
+      clinical_notes: screening.clinical_notes || null,
+      clinical_risk_level: screening.clinical_risk_level || null,
+      reviewed_at: screening.reviewed_at || null,
+      reviewed_by: screening.reviewed_by || null,
     }));
 
     return {

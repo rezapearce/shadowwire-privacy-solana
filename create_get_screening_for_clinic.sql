@@ -22,7 +22,11 @@ BEGIN
     'ai_risk_score', s.ai_risk_score,
     'ai_summary', s.ai_summary,
     'answers', COALESCE(s.answers, '[]'::jsonb),
-    'created_at', s.created_at
+    'created_at', s.created_at,
+    'clinical_notes', s.clinical_notes,
+    'clinical_risk_level', s.clinical_risk_level,
+    'reviewed_at', s.reviewed_at,
+    'reviewed_by', s.reviewed_by
   )
   INTO result
   FROM screenings s

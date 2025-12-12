@@ -1,16 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { QrCode, Stethoscope } from 'lucide-react';
+import { QrCode, Stethoscope, CheckCircle2, Clock, AlertCircle, AlertTriangle } from 'lucide-react';
 import { useFamilyStore } from '@/store/useFamilyStore';
 import { signWithMPC } from '@/lib/zenrock/mpc';
+import { getFamilyScreenings } from '@/app/actions/submitScreening';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ClinicPaymentModal } from '@/components/dashboard/ClinicPaymentModal';
 import { ScannerModal } from '@/components/dashboard/ScannerModal';
+import { OfficialReportModal } from '@/components/dashboard/OfficialReportModal';
 import { UnifiedActivityList } from '@/components/dashboard/UnifiedActivityList';
 import { WalletFaucet } from '@/components/dashboard/WalletFaucet';
 import { WalletConnectButton } from '@/components/dashboard/WalletConnectButton';
@@ -22,6 +24,9 @@ export function ParentDashboard() {
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [latestScreening, setLatestScreening] = useState<any | null>(null);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+  const [isLoadingScreening, setIsLoadingScreening] = useState(true);
 
   const totalFamilyValue = wallet.sol + wallet.usdc + wallet.zenzec;
   const pendingTransactions = transactions.filter((tx) => tx.status === 'pending');
@@ -77,6 +82,51 @@ export function ParentDashboard() {
   const handleScanSuccess = () => {
     setIsPaymentModalOpen(true);
   };
+
+  // Fetch latest screening
+  useEffect(() => {
+    const fetchLatestScreening = async () => {
+      if (!currentUser?.familyId) {
+        setIsLoadingScreening(false);
+        return;
+      }
+
+      try {
+        setIsLoadingScreening(true);
+        const result = await getFamilyScreenings(currentUser.familyId);
+        if (result.success && result.screenings && result.screenings.length > 0) {
+          // Get the most recent screening
+          setLatestScreening(result.screenings[0]);
+        } else {
+          setLatestScreening(null);
+        }
+      } catch (error) {
+        console.error('Error fetching latest screening:', error);
+        setLatestScreening(null);
+      } finally {
+        setIsLoadingScreening(false);
+      }
+    };
+
+    fetchLatestScreening();
+  }, [currentUser?.familyId]);
+
+  // Refetch screening when modal closes to catch status updates
+  useEffect(() => {
+    if (!isReportModalOpen && currentUser?.familyId) {
+      const fetchLatestScreening = async () => {
+        try {
+          const result = await getFamilyScreenings(currentUser.familyId);
+          if (result.success && result.screenings && result.screenings.length > 0) {
+            setLatestScreening(result.screenings[0]);
+          }
+        } catch (error) {
+          console.error('Error refetching screening:', error);
+        }
+      };
+      fetchLatestScreening();
+    }
+  }, [isReportModalOpen, currentUser?.familyId]);
 
   // Debug: Log that component is rendering
   console.log('ParentDashboard rendering - Scan button should be visible');
@@ -223,6 +273,97 @@ export function ParentDashboard() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Developmental Checkup Card */}
+      <Card className="border-teal-200">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Stethoscope className="h-5 w-5 text-teal-600" />
+            Developmental Checkup
+          </CardTitle>
+          <CardDescription>Latest screening status</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoadingScreening ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-teal-600"></div>
+              <span className="ml-3 text-muted-foreground">Loading...</span>
+            </div>
+          ) : !latestScreening ? (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground mb-4">No screenings yet</p>
+              <Button onClick={() => router.push('/screening/wizard')}>
+                Start Your First Screening
+              </Button>
+            </div>
+          ) : latestScreening.status === 'COMPLETED' ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <h3 className="font-semibold text-lg">{latestScreening.child_name}</h3>
+                    <Badge className="bg-green-100 text-green-800 border-green-300">
+                      <CheckCircle2 className="h-3 w-3 mr-1" />
+                      Results Ready
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Age: {latestScreening.child_age_months} months • {formatDate(latestScreening.created_at)}
+                    {latestScreening.clinical_risk_level && (
+                      <span className="ml-2">
+                        • Final Assessment: <span className="font-semibold">{latestScreening.clinical_risk_level}</span>
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+              <Button
+                onClick={() => setIsReportModalOpen(true)}
+                className="w-full bg-teal-600 hover:bg-teal-700 text-white"
+                size="lg"
+              >
+                View Official Report
+              </Button>
+            </div>
+          ) : latestScreening.status === 'REVIEW_PAID' || latestScreening.status === 'PENDING_REVIEW' ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <h3 className="font-semibold text-lg">{latestScreening.child_name}</h3>
+                    <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                      <Clock className="h-3 w-3 mr-1" />
+                      Waiting for Doctor&apos;s Review...
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Age: {latestScreening.child_age_months} months • {formatDate(latestScreening.created_at)}
+                  </p>
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground italic">
+                Your screening has been submitted and payment received. A pediatrician will review your child&apos;s assessment shortly.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <h3 className="font-semibold text-lg">{latestScreening.child_name}</h3>
+                    <Badge variant="outline">
+                      {latestScreening.status?.replace('_', ' ') || 'Pending'}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Age: {latestScreening.child_age_months} months • {formatDate(latestScreening.created_at)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
       
       {/* Modals */}
       <ScannerModal
@@ -233,6 +374,11 @@ export function ParentDashboard() {
       <ClinicPaymentModal
         isOpen={isPaymentModalOpen}
         onOpenChange={setIsPaymentModalOpen}
+      />
+      <OfficialReportModal
+        isOpen={isReportModalOpen}
+        onOpenChange={setIsReportModalOpen}
+        screening={latestScreening}
       />
       
       {/* Total Family Value */}
