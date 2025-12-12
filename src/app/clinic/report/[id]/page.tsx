@@ -71,6 +71,10 @@ export default function ClinicalReportPage() {
     return categoryMap[category] || category;
   };
 
+  const getShortId = (uuid: string): string => {
+    return uuid.substring(0, 8).toUpperCase();
+  };
+
   if (loading) {
     return (
       <div className="container mx-auto p-6 space-y-6">
@@ -89,8 +93,13 @@ export default function ClinicalReportPage() {
       <div className="container mx-auto p-6 space-y-6">
         <Card className="border-teal-200">
           <CardHeader>
-            <CardTitle>Error</CardTitle>
-            <CardDescription>{error || 'Report not found'}</CardDescription>
+            <CardTitle className="flex items-center gap-2 text-destructive">
+              <AlertCircle className="h-5 w-5" />
+              Access Denied / Record Not Found
+            </CardTitle>
+            <CardDescription>
+              {error || 'The screening record could not be found or access was denied.'}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Button onClick={() => router.push('/clinic')} variant="outline">
@@ -110,7 +119,9 @@ export default function ClinicalReportPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <h1 className="text-3xl font-bold text-teal-900">Clinical Review Dashboard</h1>
+          <h1 className="text-3xl font-bold text-teal-900">
+            Clinical Review: Screening #{getShortId(screeningId)}
+          </h1>
           <Badge className="bg-teal-600 text-white border-teal-700">
             <Shield className="h-3 w-3 mr-1" />
             Secure Access
@@ -122,138 +133,139 @@ export default function ClinicalReportPage() {
         </Button>
       </div>
 
-      {/* Patient Card */}
-      <Card className="border-teal-200">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <User className="h-5 w-5 text-teal-600" />
-            Patient Information
-          </CardTitle>
-          <CardDescription>Screening conducted on {formatDate(report.created_at)}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* Two-Column Grid Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left Column: Patient Summary Card */}
+        <Card className="border-teal-200">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-5 w-5 text-teal-600" />
+              Patient Summary
+            </CardTitle>
+            <CardDescription>Screening conducted on {formatDate(report.created_at)}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Child Age */}
             <div>
-              <p className="text-sm text-muted-foreground mb-1">Child Name</p>
-              <p className="text-lg font-semibold">{report.child_name}</p>
+              <p className="text-sm text-muted-foreground mb-1">Child Age</p>
+              <p className="text-2xl font-bold text-teal-900">{report.child_age_months} months</p>
             </div>
+
+            {/* Risk Badge */}
             <div>
-              <p className="text-sm text-muted-foreground mb-1">Age</p>
-              <p className="text-lg font-semibold">{report.child_age_months} months</p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground mb-1">Risk Level</p>
+              <p className="text-sm text-muted-foreground mb-2">Risk Level</p>
               <Badge 
                 variant={getRiskBadgeVariant(riskLevel)}
-                className="text-base px-3 py-1"
+                className={`text-base px-4 py-2 ${
+                  riskLevel === 'High' 
+                    ? 'bg-red-100 text-red-800 border-red-300' 
+                    : 'bg-green-100 text-green-800 border-green-300'
+                }`}
               >
                 {riskLevel === 'High' ? (
                   <>
-                    <AlertCircle className="h-4 w-4 mr-1" />
+                    <AlertCircle className="h-4 w-4 mr-2" />
                     High Risk
                   </>
                 ) : (
                   <>
-                    <CheckCircle2 className="h-4 w-4 mr-1" />
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
                     Low Risk
                   </>
                 )}
               </Badge>
+              {report.ai_risk_score !== null && (
+                <p className="text-sm text-muted-foreground mt-2">
+                  AI Risk Score: {report.ai_risk_score} / 100
+                </p>
+              )}
             </div>
-          </div>
-          {report.ai_risk_score !== null && (
-            <div className="mt-4 pt-4 border-t">
-              <p className="text-sm text-muted-foreground mb-1">AI Risk Score</p>
-              <p className="text-2xl font-bold text-teal-700">{report.ai_risk_score} / 100</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
-      {/* AI Summary Card */}
-      {report.ai_summary && (
-        <Card className="border-teal-200">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-teal-600" />
-              AI Analysis Summary
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-base leading-relaxed text-gray-700 whitespace-pre-wrap">
-              {report.ai_summary}
-            </p>
+            {/* AI Summary */}
+            {report.ai_summary && (
+              <div className="pt-4 border-t">
+                <p className="text-sm font-semibold text-teal-900 mb-2 flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  AI Summary
+                </p>
+                <p className="text-sm leading-relaxed text-gray-700 whitespace-pre-wrap">
+                  {report.ai_summary}
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
-      )}
 
-      {/* Detailed Answers */}
-      <Card className="border-teal-200">
-        <CardHeader>
-          <CardTitle>Detailed Questionnaire Responses</CardTitle>
-          <CardDescription>
-            {report.answers.length} questions answered
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-3 px-4 font-semibold">Category</th>
-                  <th className="text-left py-3 px-4 font-semibold">Question</th>
-                  <th className="text-left py-3 px-4 font-semibold">Milestone Age</th>
-                  <th className="text-left py-3 px-4 font-semibold">Response</th>
-                </tr>
-              </thead>
-              <tbody>
-                {report.answers.map((answer, index) => (
-                  <tr
-                    key={index}
-                    className="border-b hover:bg-teal-50/50 transition-colors"
-                  >
-                    <td className="py-3 px-4">
-                      <Badge variant="outline" className="border-teal-300 text-teal-700">
-                        {getCategoryDisplayName(answer.category)}
-                      </Badge>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className="text-sm">{answer.questionText}</span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className="text-sm text-muted-foreground">
-                        {answer.milestoneAgeMonths} months
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <Badge
-                        variant={answer.response ? 'default' : 'destructive'}
-                        className={
-                          answer.response
-                            ? 'bg-green-100 text-green-800 border-green-200'
-                            : 'bg-red-100 text-red-800 border-red-200'
-                        }
-                      >
-                        {answer.response ? (
-                          <>
-                            <CheckCircle2 className="h-3 w-3 mr-1" />
-                            Yes
-                          </>
-                        ) : (
-                          <>
-                            <AlertCircle className="h-3 w-3 mr-1" />
-                            No
-                          </>
-                        )}
-                      </Badge>
-                    </td>
+        {/* Right Column: Questionnaire Responses */}
+        <Card className="border-teal-200">
+          <CardHeader>
+            <CardTitle>Questionnaire Responses</CardTitle>
+            <CardDescription>
+              {report.answers.length} questions answered
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-3 px-4 font-semibold text-sm">Category</th>
+                    <th className="text-left py-3 px-4 font-semibold text-sm">Question</th>
+                    <th className="text-left py-3 px-4 font-semibold text-sm">Milestone Age</th>
+                    <th className="text-left py-3 px-4 font-semibold text-sm">Response</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
+                </thead>
+                <tbody>
+                  {report.answers.map((answer, index) => (
+                    <tr
+                      key={index}
+                      className={`border-b hover:bg-teal-50/50 transition-colors ${
+                        !answer.response ? 'bg-orange-50/30' : ''
+                      }`}
+                    >
+                      <td className="py-3 px-4">
+                        <Badge variant="outline" className="border-teal-300 text-teal-700 text-xs">
+                          {getCategoryDisplayName(answer.category)}
+                        </Badge>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="text-sm">{answer.questionText}</span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="text-sm text-muted-foreground">
+                          {answer.milestoneAgeMonths} months
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <Badge
+                          variant={answer.response ? 'default' : 'destructive'}
+                          className={
+                            answer.response
+                              ? 'bg-green-100 text-green-800 border-green-200'
+                              : 'bg-red-100 text-red-800 border-red-200'
+                          }
+                        >
+                          {answer.response ? (
+                            <>
+                              <CheckCircle2 className="h-3 w-3 mr-1" />
+                              Yes
+                            </>
+                          ) : (
+                            <>
+                              <AlertCircle className="h-3 w-3 mr-1" />
+                              No
+                            </>
+                          )}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Privacy Footer */}
       <Card className="border-teal-200 bg-teal-50/50">
@@ -265,7 +277,7 @@ export default function ClinicalReportPage() {
                 Privacy Note
               </p>
               <p className="text-sm text-teal-700 leading-relaxed">
-                This clinical record was accessed via Zcash-shielded payment. Parent identity, wallet address, and financial information remain anonymous and are not visible to clinic staff.
+                Identity Protected. This record was accessed via Zcash-shielded settlement. Parent wallet unknown.
               </p>
             </div>
           </div>

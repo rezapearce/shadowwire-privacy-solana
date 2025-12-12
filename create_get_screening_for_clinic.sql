@@ -10,17 +10,28 @@ AS $$
 DECLARE
   result JSON;
 BEGIN
+  -- Validate UUID format (defense in depth)
+  IF target_screening_id IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  -- Select screening record and build JSON object
   SELECT json_build_object(
     'child_name', s.child_name,
     'child_age_months', s.child_age_months,
     'ai_risk_score', s.ai_risk_score,
     'ai_summary', s.ai_summary,
-    'answers', s.answers,
+    'answers', COALESCE(s.answers, '[]'::jsonb),
     'created_at', s.created_at
   )
   INTO result
   FROM screenings s
   WHERE s.id = target_screening_id;
+  
+  -- Return NULL if no record found (instead of empty JSON object)
+  IF result IS NULL THEN
+    RETURN NULL;
+  END IF;
   
   RETURN result;
 END;

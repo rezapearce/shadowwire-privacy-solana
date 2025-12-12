@@ -50,21 +50,47 @@ export async function getClinicalReport(screeningId: string): Promise<{
       };
     }
 
-    if (!data) {
+    if (!data || (typeof data === 'object' && Object.keys(data).length === 0)) {
       return {
         success: false,
         error: 'Screening record not found',
       };
     }
 
+    // Transform answers: convert string responses ("Yes"/"No"/"Not Yet") to boolean
+    const transformedAnswers: ScreeningAnswer[] = (data.answers || []).map((answer: any) => {
+      // Handle different response formats
+      let responseValue: boolean;
+      
+      if (typeof answer.response === 'boolean') {
+        // Already boolean
+        responseValue = answer.response;
+      } else if (typeof answer.response === 'string') {
+        // Convert string to boolean: "Yes" -> true, "No" or "Not Yet" -> false
+        const normalizedResponse = answer.response.trim().toLowerCase();
+        responseValue = normalizedResponse === 'yes';
+      } else {
+        // Default to false for missing/invalid responses
+        responseValue = false;
+      }
+
+      return {
+        questionId: answer.questionId || answer.question_id || '',
+        response: responseValue,
+        category: answer.category || '',
+        questionText: answer.questionText || answer.question_text || '',
+        milestoneAgeMonths: answer.milestoneAgeMonths || answer.milestone_age_months || 0,
+      };
+    });
+
     // Transform the data to match our interface
     const report: ClinicalReport = {
-      child_name: data.child_name,
-      child_age_months: data.child_age_months,
-      ai_risk_score: data.ai_risk_score,
-      ai_summary: data.ai_summary,
-      answers: data.answers || [],
-      created_at: data.created_at,
+      child_name: data.child_name || '',
+      child_age_months: data.child_age_months || 0,
+      ai_risk_score: data.ai_risk_score ?? null,
+      ai_summary: data.ai_summary || null,
+      answers: transformedAnswers,
+      created_at: data.created_at || new Date().toISOString(),
     };
 
     return {

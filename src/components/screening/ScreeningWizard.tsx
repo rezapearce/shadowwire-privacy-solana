@@ -10,76 +10,136 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Loader2, CheckCircle2, AlertCircle, Users, Hand, MessageSquare, Activity, LucideIcon } from 'lucide-react';
+import { getQuestionsByDomain } from '@/lib/services/questionService';
+import { ScreeningDomain, QuestionsByDomain, DenverQuestion } from '@/types/screening';
 
-type WizardStep = 'input' | 'questions' | 'analyzing' | 'results';
+type WizardStep = 'intro' | 'domains' | 'review' | 'analyzing' | 'results';
 
-interface MVPQuestion {
-  questionId: string;
-  questionText: string;
-  category: 'gross_motor' | 'language';
-  milestoneAgeMonths: number;
-}
+type AnswerValue = 'Yes' | 'Not Yet' | 'No';
 
-// MVP Questions - Simplified subset for demo
-const MVP_QUESTIONS: MVPQuestion[] = [
-  // Gross Motor questions
-  {
-    questionId: 'gm_mvp_1',
-    questionText: 'Walks well',
-    category: 'gross_motor',
-    milestoneAgeMonths: 13,
-  },
-  {
-    questionId: 'gm_mvp_2',
-    questionText: 'Stoops and recovers',
-    category: 'gross_motor',
-    milestoneAgeMonths: 15,
-  },
-  {
-    questionId: 'gm_mvp_3',
-    questionText: 'Runs steadily',
-    category: 'gross_motor',
-    milestoneAgeMonths: 20,
-  },
-  // Language questions
-  {
-    questionId: 'lang_mvp_1',
-    questionText: 'Says 3 words',
-    category: 'language',
-    milestoneAgeMonths: 14,
-  },
-  {
-    questionId: 'lang_mvp_2',
-    questionText: 'Follows simple commands',
-    category: 'language',
-    milestoneAgeMonths: 17,
-  },
-  {
-    questionId: 'lang_mvp_3',
-    questionText: 'Uses 2-word phrases',
-    category: 'language',
-    milestoneAgeMonths: 26,
-  },
+// Domain order for sequential navigation
+const DOMAIN_ORDER: ScreeningDomain[] = [
+  ScreeningDomain.PERSONAL_SOCIAL,
+  ScreeningDomain.FINE_MOTOR,
+  ScreeningDomain.LANGUAGE,
+  ScreeningDomain.GROSS_MOTOR,
 ];
 
-const categoryLabels: Record<string, string> = {
-  gross_motor: 'Gross Motor',
-  language: 'Language',
+// Domain labels for display
+const DOMAIN_LABELS: Record<ScreeningDomain, string> = {
+  [ScreeningDomain.PERSONAL_SOCIAL]: 'Personal-Social',
+  [ScreeningDomain.FINE_MOTOR]: 'Fine Motor',
+  [ScreeningDomain.LANGUAGE]: 'Language',
+  [ScreeningDomain.GROSS_MOTOR]: 'Gross Motor',
 };
 
-const categoryColors: Record<string, string> = {
-  gross_motor: 'bg-blue-100 text-blue-800',
-  language: 'bg-purple-100 text-purple-800',
+// Domain icons mapping
+const DOMAIN_ICONS: Record<ScreeningDomain, LucideIcon> = {
+  [ScreeningDomain.PERSONAL_SOCIAL]: Users,
+  [ScreeningDomain.FINE_MOTOR]: Hand,
+  [ScreeningDomain.LANGUAGE]: MessageSquare,
+  [ScreeningDomain.GROSS_MOTOR]: Activity,
 };
+
+// Domain colors for badges
+const DOMAIN_COLORS: Record<ScreeningDomain, string> = {
+  [ScreeningDomain.PERSONAL_SOCIAL]: 'bg-blue-100 text-blue-800',
+  [ScreeningDomain.FINE_MOTOR]: 'bg-purple-100 text-purple-800',
+  [ScreeningDomain.LANGUAGE]: 'bg-green-100 text-green-800',
+  [ScreeningDomain.GROSS_MOTOR]: 'bg-orange-100 text-orange-800',
+};
+
+/**
+ * Calculate age in months from birth date
+ */
+function calculateAgeInMonths(birthDate: Date): number {
+  const today = new Date();
+  const years = today.getFullYear() - birthDate.getFullYear();
+  const months = today.getMonth() - birthDate.getMonth();
+  return years * 12 + months;
+}
+
+/**
+ * Get questions for a specific domain
+ */
+function getDomainQuestions(domain: ScreeningDomain, questions: QuestionsByDomain): DenverQuestion[] {
+  return questions[domain] || [];
+}
+
+/**
+ * Check if all questions in a domain are answered
+ */
+function isDomainComplete(domain: ScreeningDomain, questions: DenverQuestion[], answers: Record<string, string>): boolean {
+  if (questions.length === 0) return true;
+  return questions.every((q) => q.id in answers && answers[q.id] !== undefined);
+}
+
+/**
+ * Calculate total steps in the wizard
+ */
+function getTotalSteps(): number {
+  return 1 + // intro
+         4 + // domains
+         1 + // review
+         1 + // analyzing
+         1;  // results
+}
+
+/**
+ * Get current step number for progress display
+ */
+function getCurrentStepNumber(step: WizardStep, domainIndex: number): number {
+  switch (step) {
+    case 'intro':
+      return 1;
+    case 'domains':
+      return 2 + domainIndex; // 2, 3, 4, 5
+    case 'review':
+      return 6;
+    case 'analyzing':
+      return 7;
+    case 'results':
+      return 8;
+    default:
+      return 1;
+  }
+}
+
+/**
+ * Get step label for progress display
+ */
+function getStepLabel(step: WizardStep, domainIndex: number, questionsByDomain: QuestionsByDomain | null): string {
+  switch (step) {
+    case 'intro':
+      return 'Child Information';
+    case 'domains':
+      if (questionsByDomain) {
+        const domain = DOMAIN_ORDER[domainIndex];
+        return DOMAIN_LABELS[domain];
+      }
+      return 'Assessment';
+    case 'review':
+      return 'Review Answers';
+    case 'analyzing':
+      return 'Analyzing';
+    case 'results':
+      return 'Results';
+    default:
+      return '';
+  }
+}
 
 export function ScreeningWizard() {
   const router = useRouter();
   const { currentUser } = useFamilyStore();
-  const [step, setStep] = useState<WizardStep>('input');
+  const [step, setStep] = useState<WizardStep>('intro');
   const [childName, setChildName] = useState('');
-  const [age, setAge] = useState<number | ''>('');
-  const [answers, setAnswers] = useState<Map<string, boolean>>(new Map());
+  const [birthDate, setBirthDate] = useState<string>('');
+  const [currentDomainIndex, setCurrentDomainIndex] = useState(0);
+  const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
+  const [questionsByDomain, setQuestionsByDomain] = useState<QuestionsByDomain | null>(null);
+  const [ageInMonths, setAgeInMonths] = useState<number | null>(null);
   const [screeningId, setScreeningId] = useState<string | null>(null);
   const [riskLevel, setRiskLevel] = useState<'High' | 'Low' | null>(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -97,26 +157,102 @@ export function ScreeningWizard() {
   }, [currentUser, router]);
 
   const handleStartScreening = () => {
-    if (!childName.trim() || age === '' || age < 0 || age > 36) {
-      toast.error('Please enter a valid child name and age (0-36 months)');
+    if (!childName.trim()) {
+      toast.error('Please enter the child\'s name');
       return;
     }
 
-    setStep('questions');
+    if (!birthDate) {
+      toast.error('Please enter the child\'s date of birth');
+      return;
+    }
+
+    const birth = new Date(birthDate);
+    const today = new Date();
+    
+    if (isNaN(birth.getTime())) {
+      toast.error('Please enter a valid date of birth');
+      return;
+    }
+
+    if (birth > today) {
+      toast.error('Date of birth cannot be in the future');
+      return;
+    }
+
+    // Calculate age in months
+    const age = calculateAgeInMonths(birth);
+    
+    if (age < 0 || age > 36) {
+      toast.error('Child age must be between 0 and 36 months');
+      return;
+    }
+
+    setAgeInMonths(age);
+
+    // Load questions for this age
+    try {
+      const questions = getQuestionsByDomain(age);
+      setQuestionsByDomain(questions);
+      
+      // Move to first domain
+      setCurrentDomainIndex(0);
+      setStep('domains');
+    } catch (error) {
+      console.error('Error loading questions:', error);
+      toast.error('Failed to load screening questions. Please try again.');
+    }
   };
 
-  const handleAnswerToggle = (questionId: string, value: boolean) => {
-    setAnswers((prev) => {
-      const newMap = new Map(prev);
-      newMap.set(questionId, value);
-      return newMap;
-    });
+  const handleAnswerChange = (questionId: string, value: AnswerValue) => {
+    setAnswers((prev) => ({
+      ...prev,
+      [questionId]: value,
+    }));
+  };
+
+  const handleNextDomain = () => {
+    if (!questionsByDomain) return;
+
+    const currentDomain = DOMAIN_ORDER[currentDomainIndex];
+    const domainQuestions = getDomainQuestions(currentDomain, questionsByDomain);
+    
+    if (!isDomainComplete(currentDomain, domainQuestions, answers)) {
+      toast.error('Please answer all questions in this domain before continuing');
+      return;
+    }
+
+    // Move to next domain
+    if (currentDomainIndex < DOMAIN_ORDER.length - 1) {
+      setCurrentDomainIndex(currentDomainIndex + 1);
+    } else {
+      // All domains complete, move to review
+      setStep('review');
+    }
+  };
+
+  const handlePreviousDomain = () => {
+    if (currentDomainIndex > 0) {
+      setCurrentDomainIndex(currentDomainIndex - 1);
+    } else {
+      setStep('intro');
+    }
   };
 
   const handleSubmit = async () => {
-    // Validate all questions answered
-    const unansweredQuestions = MVP_QUESTIONS.filter(
-      (q) => !answers.has(q.questionId)
+    if (!questionsByDomain || !ageInMonths) {
+      toast.error('Missing screening data. Please start over.');
+      return;
+    }
+
+    // Validate all questions are answered
+    const allQuestions: DenverQuestion[] = [];
+    DOMAIN_ORDER.forEach((domain) => {
+      allQuestions.push(...getDomainQuestions(domain, questionsByDomain));
+    });
+
+    const unansweredQuestions = allQuestions.filter(
+      (q) => !answers[q.id] || answers[q.id] === undefined
     );
 
     if (unansweredQuestions.length > 0) {
@@ -131,23 +267,21 @@ export function ScreeningWizard() {
 
     setStep('analyzing');
 
-    // Simulate Groq delay (2-3 seconds)
+    // Simulate processing delay
     await new Promise((resolve) => setTimeout(resolve, 2500));
 
     try {
-      // Log submission attempt
       console.log('=== SCREENING SUBMISSION START ===');
       console.log('Family ID:', currentUser.familyId);
       console.log('Child Name:', childName.trim());
-      console.log('Age:', Number(age));
-      console.log('Answers count:', answers.size);
-      console.log('Answers:', Array.from(answers.entries()));
-      
-      // 1. Call Server Action
+      console.log('Age:', ageInMonths);
+      console.log('Answers count:', Object.keys(answers).length);
+      console.log('Answers:', answers);
+
       const result = await submitScreening(
         currentUser.familyId,
         childName.trim(),
-        Number(age),
+        ageInMonths,
         answers
       );
 
@@ -158,13 +292,10 @@ export function ScreeningWizard() {
       console.log('Risk Level:', result?.risk_level);
       console.log('Error:', result?.error);
 
-      // 2. Check result and SAVE THE ID
       if (result && result.success && result.screening_id) {
         console.log('✅ Screening submitted successfully!');
         setScreeningId(result.screening_id);
         setRiskLevel(result.risk_level);
-        
-        // 3. FORCE NAVIGATION TO RESULT VIEW
         setStep('results');
         toast.success('Screening analysis complete!');
       } else {
@@ -179,17 +310,15 @@ export function ScreeningWizard() {
       console.error('Error:', error);
       console.error('Error message:', error instanceof Error ? error.message : String(error));
       console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-      
+
       const errorMessage = error instanceof Error ? error.message : 'Failed to submit screening';
-      
-      // Show detailed error toast
+
       toast.error('Screening Submission Failed', {
         description: errorMessage,
-        duration: 10000, // Longer duration to ensure user sees it
+        duration: 10000,
       });
-      
-      // Keep user on questions page so they can try again
-      setStep('questions');
+
+      setStep('review');
     }
   };
 
@@ -197,21 +326,63 @@ export function ScreeningWizard() {
     setIsPaymentModalOpen(true);
   };
 
-  const allQuestionsAnswered = MVP_QUESTIONS.every((q) => answers.has(q.questionId));
+  const handleStartNewScreening = () => {
+    setStep('intro');
+    setChildName('');
+    setBirthDate('');
+    setCurrentDomainIndex(0);
+    setAnswers({});
+    setQuestionsByDomain(null);
+    setAgeInMonths(null);
+    setScreeningId(null);
+    setRiskLevel(null);
+  };
 
   if (!currentUser || currentUser.role !== 'parent') {
     return null;
   }
 
+  const currentStepNumber = getCurrentStepNumber(step, currentDomainIndex);
+  const totalSteps = getTotalSteps();
+  const stepLabel = getStepLabel(step, currentDomainIndex, questionsByDomain);
+
+  // Get current domain questions
+  const currentDomain = step === 'domains' ? DOMAIN_ORDER[currentDomainIndex] : null;
+  const currentDomainQuestions = currentDomain && questionsByDomain
+    ? getDomainQuestions(currentDomain, questionsByDomain)
+    : [];
+
+  const isCurrentDomainComplete = currentDomain && questionsByDomain
+    ? isDomainComplete(currentDomain, currentDomainQuestions, answers)
+    : false;
+
   return (
     <div className="container mx-auto py-8 px-4 max-w-4xl">
-      {/* Step 1: Input Child Name & Age */}
-      {step === 'input' && (
+      {/* Progress Bar */}
+      {step !== 'intro' && step !== 'results' && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-muted-foreground">
+              Step {currentStepNumber} of {totalSteps}
+            </span>
+            <span className="text-sm font-medium">{stepLabel}</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div
+              className="bg-primary h-2 rounded-full transition-all duration-300"
+              style={{ width: `${(currentStepNumber / totalSteps) * 100}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Step 1: Intro - Child Name & Date of Birth */}
+      {step === 'intro' && (
         <Card className="w-full max-w-2xl mx-auto">
           <CardHeader>
             <CardTitle>Pediatric Developmental Screening</CardTitle>
             <CardDescription>
-              Complete a quick screening to assess your child's developmental milestones.
+              Complete a quick screening to assess your child's developmental milestones using the Denver II assessment.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -227,25 +398,23 @@ export function ScreeningWizard() {
               />
             </div>
             <div className="space-y-2">
-              <label htmlFor="age" className="text-sm font-medium">
-                Age (in months)
+              <label htmlFor="birthDate" className="text-sm font-medium">
+                Date of Birth
               </label>
               <Input
-                id="age"
-                type="number"
-                min="0"
-                max="36"
-                placeholder="e.g., 12"
-                value={age}
-                onChange={(e) => setAge(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                id="birthDate"
+                type="date"
+                value={birthDate}
+                onChange={(e) => setBirthDate(e.target.value)}
+                max={new Date().toISOString().split('T')[0]}
               />
               <p className="text-xs text-muted-foreground">
-                Enter your child's age in months (0-36 months)
+                Enter your child's date of birth (ages 0-36 months)
               </p>
             </div>
             <Button
               onClick={handleStartScreening}
-              disabled={!childName.trim() || age === ''}
+              disabled={!childName.trim() || !birthDate}
               className="w-full"
             >
               Start Screening
@@ -254,61 +423,148 @@ export function ScreeningWizard() {
         </Card>
       )}
 
-      {/* Step 2: Questions */}
-      {step === 'questions' && (
+      {/* Step 2: Domains - Sequential Domain Questions */}
+      {step === 'domains' && questionsByDomain && currentDomain && (
         <Card className="w-full max-w-2xl mx-auto">
           <CardHeader>
-            <CardTitle>Screening Questions</CardTitle>
+            <div className="flex items-center gap-2">
+              {(() => {
+                const Icon = DOMAIN_ICONS[currentDomain];
+                return <Icon className="h-5 w-5" />;
+              })()}
+              <CardTitle>{DOMAIN_LABELS[currentDomain]}</CardTitle>
+            </div>
             <CardDescription>
-              Answer Yes or No for each milestone
+              Answer each question based on your child's current abilities
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {MVP_QUESTIONS.map((question) => {
-              const answer = answers.get(question.questionId);
-              return (
-                <div key={question.questionId} className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Badge className={categoryColors[question.category] || 'bg-gray-100 text-gray-800'}>
-                      {categoryLabels[question.category] || question.category}
-                    </Badge>
-                    <span className="text-sm text-muted-foreground">
-                      Expected at {question.milestoneAgeMonths} months
-                    </span>
+            {currentDomainQuestions.length === 0 ? (
+              <p className="text-muted-foreground text-center py-8">
+                No questions available for this domain at this age.
+              </p>
+            ) : (
+              currentDomainQuestions.map((question) => {
+                const answer = answers[question.id];
+                return (
+                  <div key={question.id} className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Badge className={DOMAIN_COLORS[currentDomain]}>
+                        {DOMAIN_LABELS[currentDomain]}
+                      </Badge>
+                      <span className="text-sm text-muted-foreground">
+                        Age range: {question.ageRangeMonths.start}-{question.ageRangeMonths.end} months
+                      </span>
+                    </div>
+                    <p className="font-medium">{question.questionText}</p>
+                    <div className="flex gap-2">
+                      <Button
+                        variant={answer === 'Yes' ? 'default' : 'outline'}
+                        onClick={() => handleAnswerChange(question.id, 'Yes')}
+                        className="flex-1"
+                      >
+                        Yes
+                      </Button>
+                      <Button
+                        variant={answer === 'Not Yet' ? 'default' : 'outline'}
+                        onClick={() => handleAnswerChange(question.id, 'Not Yet')}
+                        className="flex-1"
+                      >
+                        Not Yet
+                      </Button>
+                      <Button
+                        variant={answer === 'No' ? 'default' : 'outline'}
+                        onClick={() => handleAnswerChange(question.id, 'No')}
+                        className="flex-1"
+                      >
+                        No
+                      </Button>
+                    </div>
                   </div>
-                  <p className="font-medium">{question.questionText}</p>
-                  <div className="flex gap-2">
-                    <Button
-                      variant={answer === true ? 'default' : 'outline'}
-                      onClick={() => handleAnswerToggle(question.questionId, true)}
-                      className="flex-1"
-                    >
-                      Yes
-                    </Button>
-                    <Button
-                      variant={answer === false ? 'default' : 'outline'}
-                      onClick={() => handleAnswerToggle(question.questionId, false)}
-                      className="flex-1"
-                    >
-                      No
-                    </Button>
-                  </div>
-                </div>
-              );
-            })}
-            <Button
-              onClick={handleSubmit}
-              disabled={!allQuestionsAnswered}
-              className="w-full"
-              size="lg"
-            >
-              Submit Screening
-            </Button>
+                );
+              })
+            )}
+            <div className="flex gap-2 pt-4">
+              <Button
+                onClick={handlePreviousDomain}
+                variant="outline"
+                className="flex-1"
+              >
+                {currentDomainIndex === 0 ? 'Back' : 'Previous Domain'}
+              </Button>
+              <Button
+                onClick={handleNextDomain}
+                disabled={!isCurrentDomainComplete || currentDomainQuestions.length === 0}
+                className="flex-1"
+              >
+                {currentDomainIndex < DOMAIN_ORDER.length - 1 ? 'Next Domain' : 'Review Answers'}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Step 3: Analyzing */}
+      {/* Step 3: Review - Summary of All Answers */}
+      {step === 'review' && questionsByDomain && (
+        <Card className="w-full max-w-2xl mx-auto">
+          <CardHeader>
+            <CardTitle>Review Your Answers</CardTitle>
+            <CardDescription>
+              Please review your answers before submitting. You can go back to edit if needed.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {DOMAIN_ORDER.map((domain) => {
+              const domainQuestions = getDomainQuestions(domain, questionsByDomain);
+              if (domainQuestions.length === 0) return null;
+
+              const Icon = DOMAIN_ICONS[domain];
+              return (
+                <div key={domain} className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Icon className="h-5 w-5" />
+                    <h3 className="font-semibold">{DOMAIN_LABELS[domain]}</h3>
+                  </div>
+                  <div className="space-y-2 pl-7">
+                    {domainQuestions.map((question) => {
+                      const answer = answers[question.id];
+                      return (
+                        <div key={question.id} className="flex items-start justify-between text-sm">
+                          <span className="text-muted-foreground flex-1">{question.questionText}</span>
+                          <Badge variant="outline" className="ml-2">
+                            {answer || 'Not answered'}
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+            <div className="flex gap-2 pt-4">
+              <Button
+                onClick={() => {
+                  setCurrentDomainIndex(DOMAIN_ORDER.length - 1);
+                  setStep('domains');
+                }}
+                variant="outline"
+                className="flex-1"
+              >
+                Back to Edit
+              </Button>
+              <Button
+                onClick={handleSubmit}
+                className="flex-1"
+                size="lg"
+              >
+                Submit Screening
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Step 4: Analyzing */}
       {step === 'analyzing' && (
         <Card className="w-full max-w-2xl mx-auto">
           <CardContent className="flex flex-col items-center justify-center py-12">
@@ -321,7 +577,7 @@ export function ScreeningWizard() {
         </Card>
       )}
 
-      {/* Step 4: Results */}
+      {/* Step 5: Results */}
       {step === 'results' && riskLevel && (
         <div className="space-y-6">
           {riskLevel === 'High' ? (
@@ -375,14 +631,7 @@ export function ScreeningWizard() {
                   consult with your pediatrician if you have any concerns.
                 </p>
                 <Button
-                  onClick={() => {
-                    setStep('input');
-                    setChildName('');
-                    setAge('');
-                    setAnswers(new Map());
-                    setScreeningId(null);
-                    setRiskLevel(null);
-                  }}
+                  onClick={handleStartNewScreening}
                   variant="outline"
                   className="w-full"
                 >

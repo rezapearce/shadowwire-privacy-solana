@@ -117,3 +117,6 @@ export interface ScreeningResults {
   analysis?: ScreeningAnalysis | null;
 }
 
+// Export Denver II Question types from screening.ts
+export * from './screening';
+

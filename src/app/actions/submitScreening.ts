@@ -3,6 +3,9 @@
 import { supabaseServer, supabaseFallback } from '@/lib/supabase-server';
 import { denverIIQuestions } from '@/lib/screening/denverIIQuestions';
 import { revalidatePath } from 'next/cache';
+import Groq from 'groq-sdk';
+import { buildClinicalPrompt } from '@/lib/ai/promptBuilder';
+import { getQuestionById } from '@/lib/services/questionService';
 
 // Use server client if available, otherwise fallback to regular client
 const db = supabaseServer || supabaseFallback;
@@ -11,6 +14,7 @@ export interface SubmitScreeningResult {
   success: boolean;
   screening_id?: string;
   risk_level?: 'High' | 'Low';
+  ai_risk_score?: number;
   error?: string;
 }
 
@@ -42,19 +46,19 @@ function generateSummary(
 }
 
 /**
- * Submit a screening with rule engine analysis
+ * Submit a screening with hybrid AI/rule engine analysis
  * 
  * @param familyId - UUID of the family
  * @param childName - Name of the child
  * @param age - Age in months (0-36)
- * @param answers - Map of questionId -> boolean (true = achieved, false = not achieved)
- * @returns Screening result with screening_id and risk_level
+ * @param answers - Record of questionId -> answer value ("Yes", "No", "Not Yet")
+ * @returns Screening result with screening_id, risk_level, and ai_risk_score
  */
 export async function submitScreening(
   familyId: string,
   childName: string,
   age: number,
-  answers: Map<string, boolean>
+  answers: Record<string, string>
 ): Promise<SubmitScreeningResult> {
   try {
     // Validate inputs
@@ -65,17 +69,17 @@ export async function submitScreening(
       };
     }
 
-    if (!answers || answers.size === 0) {
+    if (!answers || Object.keys(answers).length === 0) {
       return {
         success: false,
         error: 'Answers cannot be empty',
       };
     }
 
-    // Process answers: Convert Map to array with metadata
+    // Process answers: Convert Record to array with metadata
     const answersArray: Array<{
       questionId: string;
-      response: boolean;
+      response: string;
       category: string;
       questionText: string;
       milestoneAgeMonths: number;
@@ -95,7 +99,12 @@ export async function submitScreening(
     };
 
     // Look up question metadata for each answer
-    for (const [questionId, response] of Array.from(answers.entries())) {
+    for (const [questionId, answerValue] of Object.entries(answers)) {
+      // Skip empty answers
+      if (!answerValue || answerValue.trim() === '') {
+        continue;
+      }
+
       // First try to find in denverIIQuestions
       let question = denverIIQuestions.find((q) => q.questionId === questionId);
       
@@ -113,6 +122,20 @@ export async function submitScreening(
         }
       }
 
+      // Also try to get from questionService (for new question format)
+      if (!question) {
+        const denverQuestion = getQuestionById(questionId);
+        if (denverQuestion) {
+          // Convert DenverQuestion format to expected format
+          question = {
+            questionId: denverQuestion.id,
+            category: denverQuestion.domain,
+            questionText: denverQuestion.questionText,
+            milestoneAgeMonths: denverQuestion.ageRangeMonths.start,
+          } as any;
+        }
+      }
+
       if (!question) {
         console.warn(`Question not found: ${questionId}`);
         continue;
@@ -120,14 +143,14 @@ export async function submitScreening(
 
       answersArray.push({
         questionId,
-        response,
+        response: answerValue,
         category: question.category,
         questionText: question.questionText,
         milestoneAgeMonths: question.milestoneAgeMonths,
       });
 
-      // Count "No" answers (false = milestone not achieved)
-      if (!response) {
+      // Count "No" or "Not Yet" answers (missed milestones)
+      if (answerValue === 'No' || answerValue === 'Not Yet') {
         noAnswersCount++;
         affectedCategories.add(question.category);
       }
@@ -141,16 +164,77 @@ export async function submitScreening(
       };
     }
 
-    // Calculate risk using rule engine
-    const noAnswersPercentage = (noAnswersCount / totalAnswers) * 100;
-    const isHighRisk = noAnswersPercentage > 50;
+    // Hybrid AI/Rule-based logic
+    const groqApiKey = process.env.GROQ_API_KEY;
+    let ai_risk_score: number;
+    let ai_summary: string;
+    let risk_level: 'High' | 'Low';
 
-    const ai_risk_score = isHighRisk ? 85 : 10;
-    const risk_level: 'High' | 'Low' = isHighRisk ? 'High' : 'Low';
+    if (groqApiKey) {
+      // AI Path: Use Groq for analysis
+      try {
+        const groq = new Groq({ apiKey: groqApiKey });
+        const prompt = buildClinicalPrompt(age, answers);
 
-    // Generate summary
-    const affectedDomains = Array.from(affectedCategories).map(getDomainName);
-    const ai_summary = generateSummary(risk_level, affectedDomains);
+        const completion = await groq.chat.completions.create({
+          messages: [
+            {
+              role: 'system',
+              content: 'You are a pediatric developmental screening AI assistant. Analyze Denver II screening results and provide a risk assessment with a clinical summary.',
+            },
+            {
+              role: 'user',
+              content: prompt,
+            },
+          ],
+          model: 'llama3-8b-8192',
+          temperature: 0.7,
+          max_tokens: 500,
+          response_format: { type: 'json_object' },
+        });
+
+        const content = completion.choices[0]?.message?.content;
+        if (!content) {
+          throw new Error('No response from Groq API');
+        }
+
+        const parsed = JSON.parse(content);
+        
+        // Validate and extract risk_score and summary
+        ai_risk_score = typeof parsed.risk_score === 'number'
+          ? Math.max(0, Math.min(100, parsed.risk_score))
+          : (noAnswersCount / totalAnswers) * 100;
+
+        ai_summary = typeof parsed.summary === 'string' && parsed.summary.trim()
+          ? parsed.summary.trim()
+          : generateSummary(
+              ai_risk_score >= 50 ? 'High' : 'Low',
+              Array.from(affectedCategories).map(getDomainName)
+            );
+
+        risk_level = ai_risk_score >= 50 ? 'High' : 'Low';
+
+        console.log('AI analysis completed:', { ai_risk_score, risk_level });
+      } catch (error) {
+        console.error('Error calling Groq API, falling back to rule-based logic:', error);
+        // Fallback to rule-based logic
+        const noAnswersPercentage = (noAnswersCount / totalAnswers) * 100;
+        const isHighRisk = noAnswersPercentage > 50;
+        ai_risk_score = isHighRisk ? 85 : 10;
+        risk_level = isHighRisk ? 'High' : 'Low';
+        const affectedDomains = Array.from(affectedCategories).map(getDomainName);
+        ai_summary = generateSummary(risk_level, affectedDomains);
+      }
+    } else {
+      // Rule-based fallback (when GROQ_API_KEY is not set)
+      const noAnswersPercentage = (noAnswersCount / totalAnswers) * 100;
+      const isHighRisk = noAnswersPercentage > 50;
+      ai_risk_score = isHighRisk ? 85 : 10;
+      risk_level = isHighRisk ? 'High' : 'Low';
+      const affectedDomains = Array.from(affectedCategories).map(getDomainName);
+      ai_summary = generateSummary(risk_level, affectedDomains);
+      console.log('Using rule-based analysis (GROQ_API_KEY not configured)');
+    }
 
     // Insert into screenings table
     const insertData = {
@@ -212,6 +296,7 @@ export async function submitScreening(
       success: true,
       screening_id: data.id,
       risk_level,
+      ai_risk_score,
     };
   } catch (error) {
     console.error('Unexpected error in submitScreening:', error);
