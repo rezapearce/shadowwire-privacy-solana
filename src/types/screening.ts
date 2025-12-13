@@ -51,6 +51,7 @@ export interface QuestionnaireResponse {
   question_id: string;
   response: QuestionResponse;
   notes?: string;
+  video_url?: string; // Optional path to video evidence in storage bucket
 }
 
 /**

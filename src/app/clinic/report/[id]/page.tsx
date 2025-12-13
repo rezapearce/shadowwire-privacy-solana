@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Loader2, ArrowLeft, Shield, User, FileText, AlertCircle, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Loader2, ArrowLeft, Shield, User, FileText, AlertCircle, CheckCircle2, AlertTriangle, Video } from 'lucide-react';
 import { getClinicalReport, ClinicalReport } from '@/app/actions/getClinicalReport';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -262,26 +262,39 @@ export default function ClinicalReportPage() {
                         </span>
                       </td>
                       <td className="py-3 px-4">
-                        <Badge
-                          variant={answer.response ? 'default' : 'destructive'}
-                          className={
-                            answer.response
-                              ? 'bg-green-100 text-green-800 border-green-200'
-                              : 'bg-red-100 text-red-800 border-red-200'
-                          }
-                        >
-                          {answer.response ? (
-                            <>
-                              <CheckCircle2 className="h-3 w-3 mr-1" />
-                              Yes
-                            </>
-                          ) : (
-                            <>
-                              <AlertCircle className="h-3 w-3 mr-1" />
-                              No
-                            </>
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant={answer.response ? 'default' : 'destructive'}
+                            className={
+                              answer.response
+                                ? 'bg-green-100 text-green-800 border-green-200'
+                                : 'bg-red-100 text-red-800 border-red-200'
+                            }
+                          >
+                            {answer.response ? (
+                              <>
+                                <CheckCircle2 className="h-3 w-3 mr-1" />
+                                Yes
+                              </>
+                            ) : (
+                              <>
+                                <AlertCircle className="h-3 w-3 mr-1" />
+                                No
+                              </>
+                            )}
+                          </Badge>
+                          {answer.video_url && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => window.open(answer.video_url, '_blank')}
+                              className="h-7"
+                            >
+                              <Video className="h-3 w-3 mr-1" />
+                              Watch Video
+                            </Button>
                           )}
-                        </Badge>
+                        </div>
                       </td>
                     </tr>
                   ))}

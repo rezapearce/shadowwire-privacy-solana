@@ -52,13 +52,17 @@ function generateSummary(
  * @param childName - Name of the child
  * @param age - Age in months (0-36)
  * @param answers - Record of questionId -> answer value ("Yes", "No", "Not Yet")
+ * @param videoUrls - Optional Record of questionId -> video path in storage
+ * @param screeningId - Optional pre-generated screening ID (for video uploads)
  * @returns Screening result with screening_id, risk_level, and ai_risk_score
  */
 export async function submitScreening(
   familyId: string,
   childName: string,
   age: number,
-  answers: Record<string, string>
+  answers: Record<string, string>,
+  videoUrls?: Record<string, string>,
+  screeningId?: string | null
 ): Promise<SubmitScreeningResult> {
   try {
     // Validate inputs
@@ -83,6 +87,7 @@ export async function submitScreening(
       category: string;
       questionText: string;
       milestoneAgeMonths: number;
+      video_url?: string; // Optional path to video evidence in storage bucket
     }> = [];
 
     let noAnswersCount = 0;
@@ -141,12 +146,16 @@ export async function submitScreening(
         continue;
       }
 
+      // Include video URL if available for this question
+      const videoUrl = videoUrls?.[questionId];
+
       answersArray.push({
         questionId,
         response: answerValue,
         category: question.category,
         questionText: question.questionText,
         milestoneAgeMonths: question.milestoneAgeMonths,
+        ...(videoUrl && { video_url: videoUrl }),
       });
 
       // Count "No" or "Not Yet" answers (missed milestones)
@@ -237,7 +246,8 @@ export async function submitScreening(
     }
 
     // Insert into screenings table
-    const insertData = {
+    // Use provided screeningId if available (for video uploads), otherwise let DB generate one
+    const insertData: any = {
       family_id: familyId,
       child_name: childName.trim(),
       child_age_months: age,
@@ -246,6 +256,11 @@ export async function submitScreening(
       ai_summary,
       status: 'PENDING_REVIEW' as const,
     };
+
+    // If screeningId is provided, use it (videos are already uploaded with this ID)
+    if (screeningId) {
+      insertData.id = screeningId;
+    }
 
     // Log database client info for debugging
     const dbType = supabaseServer ? 'server (service role)' : 'fallback (anon)';

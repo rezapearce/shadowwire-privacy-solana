@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, CheckCircle2, AlertCircle, Users, Hand, MessageSquare, Activity, LucideIcon } from 'lucide-react';
 import { getQuestionsByDomain } from '@/lib/services/questionService';
 import { ScreeningDomain, QuestionsByDomain, DenverQuestion } from '@/types/screening';
+import { VideoEvidenceUploader } from './VideoEvidenceUploader';
 
 type WizardStep = 'intro' | 'domains' | 'review' | 'analyzing' | 'results';
 
@@ -138,6 +139,7 @@ export function ScreeningWizard() {
   const [birthDate, setBirthDate] = useState<string>('');
   const [currentDomainIndex, setCurrentDomainIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, AnswerValue>>({});
+  const [videoUrls, setVideoUrls] = useState<Record<string, string>>({});
   const [questionsByDomain, setQuestionsByDomain] = useState<QuestionsByDomain | null>(null);
   const [ageInMonths, setAgeInMonths] = useState<number | null>(null);
   const [screeningId, setScreeningId] = useState<string | null>(null);
@@ -189,6 +191,10 @@ export function ScreeningWizard() {
     }
 
     setAgeInMonths(age);
+
+    // Generate screening ID early for video uploads
+    const tempScreeningId = crypto.randomUUID();
+    setScreeningId(tempScreeningId);
 
     // Load questions for this age
     try {
@@ -277,12 +283,15 @@ export function ScreeningWizard() {
       console.log('Age:', ageInMonths);
       console.log('Answers count:', Object.keys(answers).length);
       console.log('Answers:', answers);
+      console.log('Video URLs:', videoUrls);
 
       const result = await submitScreening(
         currentUser.familyId,
         childName.trim(),
         ageInMonths,
-        answers
+        answers,
+        videoUrls,
+        screeningId
       );
 
       console.log('=== SUBMISSION RESULT ===');
@@ -332,10 +341,26 @@ export function ScreeningWizard() {
     setBirthDate('');
     setCurrentDomainIndex(0);
     setAnswers({});
+    setVideoUrls({});
     setQuestionsByDomain(null);
     setAgeInMonths(null);
     setScreeningId(null);
     setRiskLevel(null);
+  };
+
+  const handleVideoUploadComplete = (questionId: string, videoPath: string) => {
+    setVideoUrls((prev) => ({
+      ...prev,
+      [questionId]: videoPath,
+    }));
+  };
+
+  const handleVideoRemove = (questionId: string) => {
+    setVideoUrls((prev) => {
+      const updated = { ...prev };
+      delete updated[questionId];
+      return updated;
+    });
   };
 
   if (!currentUser || currentUser.role !== 'parent') {
@@ -457,6 +482,11 @@ export function ScreeningWizard() {
                       </span>
                     </div>
                     <p className="font-medium">{question.questionText}</p>
+                    {question.videoInstruction && (
+                      <p className="text-sm text-muted-foreground italic">
+                        {question.videoInstruction}
+                      </p>
+                    )}
                     <div className="flex gap-2">
                       <Button
                         variant={answer === 'Yes' ? 'default' : 'outline'}
@@ -480,6 +510,16 @@ export function ScreeningWizard() {
                         No
                       </Button>
                     </div>
+                    {question.requiresVideo && currentUser && screeningId && (
+                      <VideoEvidenceUploader
+                        questionId={question.id}
+                        userId={currentUser.id}
+                        screeningId={screeningId}
+                        onUploadComplete={(path) => handleVideoUploadComplete(question.id, path)}
+                        onRemove={() => handleVideoRemove(question.id)}
+                        existingVideoUrl={videoUrls[question.id]}
+                      />
+                    )}
                   </div>
                 );
               })

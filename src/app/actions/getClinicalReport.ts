@@ -1,6 +1,7 @@
 'use server';
 
 import { supabase } from '@/lib/supabase';
+import { supabaseServer, supabaseFallback } from '@/lib/supabase-server';
 
 export interface ScreeningAnswer {
   questionId: string;
@@ -8,6 +9,7 @@ export interface ScreeningAnswer {
   category: string;
   questionText: string;
   milestoneAgeMonths: number;
+  video_url?: string; // Optional path to video evidence in storage bucket
 }
 
 export interface ClinicalReport {
@@ -84,8 +86,37 @@ export async function getClinicalReport(screeningId: string): Promise<{
         category: answer.category || '',
         questionText: answer.questionText || answer.question_text || '',
         milestoneAgeMonths: answer.milestoneAgeMonths || answer.milestone_age_months || 0,
+        video_url: answer.video_url || answer.videoUrl || undefined,
       };
     });
+
+    // Generate signed URLs for videos using service role key (bypasses RLS)
+    const db = supabaseServer || supabaseFallback;
+    const answersWithSignedUrls = await Promise.all(
+      transformedAnswers.map(async (answer) => {
+        if (answer.video_url) {
+          try {
+            const { data: signedUrlData, error: signedUrlError } = await db.storage
+              .from('clinical-evidence')
+              .createSignedUrl(answer.video_url, 3600); // Valid for 1 hour
+            
+            if (signedUrlError) {
+              console.error(`Failed to generate signed URL for ${answer.video_url}:`, signedUrlError);
+              // Return answer without video_url if signed URL generation fails
+              return { ...answer, video_url: undefined };
+            }
+            
+            // Replace private path with signed URL
+            return { ...answer, video_url: signedUrlData.signedUrl };
+          } catch (error) {
+            console.error(`Error generating signed URL for ${answer.video_url}:`, error);
+            // Return answer without video_url if error occurs
+            return { ...answer, video_url: undefined };
+          }
+        }
+        return answer;
+      })
+    );
 
     // Transform the data to match our interface
     const report: ClinicalReport = {
@@ -93,7 +124,7 @@ export async function getClinicalReport(screeningId: string): Promise<{
       child_age_months: data.child_age_months || 0,
       ai_risk_score: data.ai_risk_score ?? null,
       ai_summary: data.ai_summary || null,
-      answers: transformedAnswers,
+      answers: answersWithSignedUrls,
       created_at: data.created_at || new Date().toISOString(),
       clinical_notes: data.clinical_notes || null,
       clinical_risk_level: data.clinical_risk_level || null,
