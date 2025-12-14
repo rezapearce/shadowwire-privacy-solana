@@ -31,26 +31,48 @@ export function NotificationBell({ userId }: NotificationBellProps) {
     console.log('🔔 NotificationBell useEffect - rendered with userId:', userId);
   }, [userId]);
 
-  // Fetch notifications on mount and when userId changes
+  // Fetch notifications on mount, when userId changes, and when opening dropdown
   useEffect(() => {
-    if (!userId) return;
+    console.log("🔔 [Frontend Debug] useEffect triggered, userId:", userId, "isOpen:", isOpen);
+    
+    if (!userId) {
+      console.warn("🔔 [Frontend Debug] Skipping fetch - no userId");
+      return;
+    }
 
     const fetchNotifications = async () => {
+      console.log("🔔 [Frontend Debug] Starting fetchNotifications for userId:", userId);
       setIsLoading(true);
       try {
+        console.log("🔔 [Frontend Debug] Calling getNotifications server action...");
         const result = await getNotifications(userId);
+        console.log("🔔 [Frontend Debug] getNotifications returned:", result);
+        
+        // ADD DEBUG LOGGING
+        console.log("🔔 [Frontend Debug] Notifications fetched:", result);
+        console.log("🔔 [Frontend Debug] Result success:", result.success);
+        console.log("🔔 [Frontend Debug] Result data:", result.data);
+        console.log("🔔 [Frontend Debug] Result error:", result.error);
+        console.log("🔔 [Frontend Debug] Data array length:", result.data?.length || 0);
+        console.log("🔔 [Frontend Debug] Data array contents:", JSON.stringify(result.data, null, 2));
+
         if (result.success && result.data) {
           setNotifications(result.data);
+          console.log("🔔 [Frontend Debug] Notifications state updated:", result.data.length, "items");
+        } else {
+          console.warn("🔔 [Frontend Debug] Failed to fetch notifications:", result.error);
+          setNotifications([]);
         }
       } catch (error) {
-        console.error('Error fetching notifications:', error);
+        console.error('🔔 [Frontend Debug] Exception fetching notifications:', error);
+        setNotifications([]);
       } finally {
         setIsLoading(false);
       }
     };
 
     fetchNotifications();
-  }, [userId]);
+  }, [userId, isOpen]); // Add isOpen dependency to re-fetch when opening
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -95,6 +117,15 @@ export function NotificationBell({ userId }: NotificationBellProps) {
   };
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
+  
+  // Debug: Log unread count whenever notifications change
+  useEffect(() => {
+    console.log("🔔 [Frontend Debug] Unread count calculation:", {
+      totalNotifications: notifications.length,
+      unreadCount: unreadCount,
+      notifications: notifications.map(n => ({ id: n.id, is_read: n.is_read, title: n.title }))
+    });
+  }, [notifications]);
 
   // Always render the bell if userId is provided (even if there are no notifications)
   if (!userId) {

@@ -1,9 +1,6 @@
 'use server';
 
-import { supabaseServer, supabaseFallback } from '@/lib/supabase-server';
-
-// Use server client if available, otherwise fallback to regular client
-const db = supabaseServer || supabaseFallback;
+import { db } from '@/lib/supabase-server';
 
 export interface Notification {
   id: string;
@@ -34,8 +31,15 @@ export interface MarkNotificationReadResult {
  * @returns Result object with notifications array or error message
  */
 export async function getNotifications(userId: string): Promise<GetNotificationsResult> {
+  // Log at the VERY TOP - before any validation or processing
+  console.log('🚨 [notifications] ====== getNotifications SERVER ACTION CALLED ======');
+  console.log('[notifications] getNotifications called with userId:', userId);
+  console.log('[notifications] userId type:', typeof userId);
+  console.log('[notifications] timestamp:', new Date().toISOString());
+  
   try {
     if (!userId || typeof userId !== 'string' || userId.trim() === '') {
+      console.error('[notifications] invalid user ID:', userId);
       return {
         success: false,
         error: 'Invalid user ID',
@@ -45,12 +49,14 @@ export async function getNotifications(userId: string): Promise<GetNotifications
     // Validate UUID format
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!uuidRegex.test(userId)) {
+      console.error('[notifications] invalid UUID format:', userId);
       return {
         success: false,
         error: 'Invalid user ID format',
       };
     }
 
+    console.log('[notifications] querying database for user_id:', userId);
     const { data, error } = await db
       .from('notifications')
       .select('id, user_id, screening_id, title, message, is_read, created_at')
@@ -59,19 +65,23 @@ export async function getNotifications(userId: string): Promise<GetNotifications
       .limit(5);
 
     if (error) {
-      console.error('Error fetching notifications:', error);
+      console.error('[notifications] database error:', JSON.stringify(error, null, 2));
       return {
         success: false,
         error: `Failed to fetch notifications: ${error.message}`,
       };
     }
 
+    console.log('[notifications] query successful, found', data?.length || 0, 'notifications');
+    console.log('[notifications] notification data:', JSON.stringify(data, null, 2));
+
     return {
       success: true,
       data: data || [],
     };
   } catch (error) {
-    console.error('Unexpected error in getNotifications:', error);
+    console.error('[notifications] unexpected error:', error);
+    console.error('[notifications] error stack:', error instanceof Error ? error.stack : 'No stack trace');
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error occurred',
