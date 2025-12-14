@@ -38,7 +38,10 @@ export function ClinicalAssessmentForm({ screeningId }: ClinicalAssessmentFormPr
     setIsSubmitting(true);
 
     try {
+            // 📝 [Form Debug] Client-side logging
+      console.log('📝 [Form Debug] Submitting clinical review:', { screeningId, notes, riskLevel });
       const result = await submitClinicalReview(screeningId, notes, riskLevel);
+            console.log('✅ [Form Debug] Server action result:', result);
 
       if (result.success) {
         toast.success('Review submitted successfully');
@@ -47,6 +50,7 @@ export function ClinicalAssessmentForm({ screeningId }: ClinicalAssessmentFormPr
         toast.error(result.error || 'Failed to submit review');
       }
     } catch (error) {
+            console.error('❌ [Form Debug] Error submitting review:', error);
       console.error('Error submitting clinical review:', error);
       toast.error('An unexpected error occurred. Please try again.');
     } finally {

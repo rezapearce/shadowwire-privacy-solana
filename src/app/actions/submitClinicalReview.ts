@@ -25,6 +25,18 @@ export async function submitClinicalReview(
   riskLevel: 'LOW' | 'MODERATE' | 'HIGH'
 ): Promise<SubmitClinicalReviewResult> {
   try {
+        // 🚀 [Debug] Entry logging
+    console.log('🚀 [Debug] Server Action Called with:', { screeningId, notes, riskLevel });
+    console.log('🔍 [Debug] Database client:', db === supabaseServer ? 'Service Role' : 'Fallback');
+
+    // Ensure database client is available
+    if (!db) {
+      console.error('❌ [Error] No database client available');
+      return {
+        success: false,
+        error: 'Database client not initialized',
+      };
+    }
     // Validate inputs
     if (!screeningId || typeof screeningId !== 'string' || screeningId.trim() === '') {
       return {
