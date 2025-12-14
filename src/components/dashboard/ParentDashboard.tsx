@@ -17,10 +17,27 @@ import { UnifiedActivityList } from '@/components/dashboard/UnifiedActivityList'
 import { WalletFaucet } from '@/components/dashboard/WalletFaucet';
 import { WalletConnectButton } from '@/components/dashboard/WalletConnectButton';
 import { ScreeningHistory } from '@/components/screening/ScreeningHistory';
+import { DashboardSkeleton } from '@/components/skeletons/DashboardSkeleton';
+import { NotificationBell } from '@/components/dashboard/NotificationBell';
 
 export function ParentDashboard() {
+  // 🚀 AGGRESSIVE DEBUG - TOP OF COMPONENT
+  console.log('🚀🚀🚀 ParentDashboard MOUNTED - TOP OF COMPONENT 🚀🚀🚀');
+  
   const router = useRouter();
   const { wallet, transactions, approveTransaction, rejectTransaction, setUser, currentUser } = useFamilyStore();
+  
+  // 🔔 DEBUG IMMEDIATELY AFTER HOOKS
+  console.log('🔔 NotificationBell Debug - IMMEDIATE:', {
+    currentUser: currentUser,
+    userId: currentUser?.id,
+    shouldRender: !!(currentUser && currentUser.id),
+    userRole: currentUser?.role,
+    hasId: !!currentUser?.id,
+    currentUserType: typeof currentUser,
+    currentUserIdType: typeof currentUser?.id
+  });
+  
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -34,6 +51,14 @@ export function ParentDashboard() {
   // Debug: Log transactions to console
   console.log('All transactions:', transactions);
   console.log('Pending transactions:', pendingTransactions);
+  
+  // Debug: Log user data for notification bell - SECOND CHECK
+  console.log('🔔 NotificationBell Debug - SECOND CHECK:', {
+    currentUser: currentUser,
+    userId: currentUser?.id,
+    shouldRender: !!(currentUser && currentUser.id),
+    userRole: currentUser?.role
+  });
 
   const handleApprove = async (txId: string) => {
     setProcessingIds((prev) => new Set(prev).add(txId));
@@ -130,6 +155,11 @@ export function ParentDashboard() {
 
   // Debug: Log that component is rendering
   console.log('ParentDashboard rendering - Scan button should be visible');
+
+  // Show skeleton while loading initial screening data
+  if (isLoadingScreening && latestScreening === null) {
+    return <DashboardSkeleton />;
+  }
 
   return (
     <div className="container mx-auto p-6 space-y-6">
@@ -234,8 +264,44 @@ export function ParentDashboard() {
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <h1 className="text-2xl sm:text-3xl font-bold">Parent Dashboard</h1>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
           <WalletConnectButton />
+          {(() => {
+            // 🔔 AGGRESSIVE DEBUG IN RENDER
+            console.log('🔔 RENDER CHECK - About to render NotificationBell:', {
+              currentUser: currentUser,
+              userId: currentUser?.id,
+              hasId: !!currentUser?.id,
+              willRender: !!currentUser?.id
+            });
+            
+            if (currentUser?.id) {
+              console.log('✅ RENDERING NotificationBell with userId:', currentUser.id);
+              return <NotificationBell userId={currentUser.id} />;
+            } else {
+              console.warn('❌ NOT RENDERING NotificationBell - currentUser?.id is falsy:', {
+                currentUser: currentUser,
+                id: currentUser?.id,
+                type: typeof currentUser?.id
+              });
+              return (
+                <div 
+                  style={{ 
+                    display: 'block', 
+                    padding: '8px', 
+                    backgroundColor: '#fee2e2', 
+                    border: '2px solid #ef4444',
+                    borderRadius: '4px'
+                  }} 
+                  data-debug="bell-not-rendering"
+                >
+                  <span style={{ fontSize: '12px', color: '#dc2626' }}>
+                    ⚠️ No userId: {JSON.stringify({ id: currentUser?.id, hasUser: !!currentUser })}
+                  </span>
+                </div>
+              );
+            }
+          })()}
           <Button 
             onClick={handleLogout} 
             variant="outline"

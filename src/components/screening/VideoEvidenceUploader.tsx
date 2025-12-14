@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import Webcam from 'react-webcam';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Video, Upload, Play, Square, CheckCircle2, X, Loader2 } from 'lucide-react';
+import { Video, Upload, Play, Square, CheckCircle2, X, Loader2, CircleHelp, RotateCcw } from 'lucide-react';
+import { VideoInstructionModal } from './VideoInstructionModal';
 
 interface VideoEvidenceUploaderProps {
   questionId: string;
@@ -31,45 +32,93 @@ export function VideoEvidenceUploader({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [videoBlob, setVideoBlob] = useState<Blob | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(existingVideoUrl || null);
+  const [showInstructions, setShowInstructions] = useState(false);
+  const [hasSeenInstructions, setHasSeenInstructions] = useState(false);
+  const [pendingRecording, setPendingRecording] = useState(false);
+  const [shouldStartRecording, setShouldStartRecording] = useState(false);
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const webcamRef = useRef<Webcam>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Start recording when webcam stream is ready
+  useEffect(() => {
+    if (shouldStartRecording && mode === 'recording' && webcamRef.current?.stream) {
+      const stream = webcamRef.current.stream;
+      
+      try {
+        const mediaRecorder = new MediaRecorder(stream, {
+          mimeType: 'video/webm',
+        });
+
+        mediaRecorderRef.current = mediaRecorder;
+        const chunks: Blob[] = [];
+
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            chunks.push(event.data);
+          }
+        };
+
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(chunks, { type: 'video/webm' });
+          setVideoBlob(blob);
+          setRecordedChunks(chunks);
+          setMode('preview');
+        };
+
+        mediaRecorder.start();
+        setShouldStartRecording(false);
+      } catch (error: any) {
+        console.error('Error starting recording:', error);
+        toast.error('Camera access denied. Please check your browser settings or use the \'Upload File\' option instead.');
+        setMode('initial');
+        setShouldStartRecording(false);
+      }
+    }
+  }, [shouldStartRecording, mode]);
+
+  const startRecordingInternal = useCallback(() => {
+    // Set mode to recording first to render Webcam component
+    setMode('recording');
+    setShouldStartRecording(true);
+  }, []);
+
   const handleStartRecording = useCallback(() => {
-    if (!webcamRef.current?.stream) {
-      toast.error('Camera not available. Please check permissions.');
+    // Check if user has seen instructions
+    if (!hasSeenInstructions) {
+      setPendingRecording(true);
+      setShowInstructions(true);
       return;
     }
 
-    const mediaRecorder = new MediaRecorder(webcamRef.current.stream, {
-      mimeType: 'video/webm',
-    });
+    // Proceed with recording
+    startRecordingInternal();
+  }, [hasSeenInstructions, startRecordingInternal]);
 
-    mediaRecorderRef.current = mediaRecorder;
-    const chunks: Blob[] = [];
-
-    mediaRecorder.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        chunks.push(event.data);
-      }
-    };
-
-    mediaRecorder.onstop = () => {
-      const blob = new Blob(chunks, { type: 'video/webm' });
-      setVideoBlob(blob);
-      setRecordedChunks(chunks);
-      setMode('preview');
-    };
-
-    mediaRecorder.start();
-    setMode('recording');
-  }, []);
+  const handleInstructionsClose = useCallback(() => {
+    setShowInstructions(false);
+    
+    // If this was the first time and user clicked Record Video, proceed with recording
+    if (pendingRecording) {
+      setHasSeenInstructions(true);
+      setPendingRecording(false);
+      // Small delay to ensure modal closes before starting recording
+      setTimeout(() => {
+        startRecordingInternal();
+      }, 100);
+    }
+  }, [pendingRecording, startRecordingInternal]);
 
   const handleStopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     }
+  }, []);
+
+  const handleFlipCamera = useCallback(() => {
+    setFacingMode((prev) => (prev === 'user' ? 'environment' : 'user'));
   }, []);
 
   const handleFileSelect = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
@@ -163,6 +212,7 @@ export function VideoEvidenceUploader({
     setRecordedChunks([]);
     setMode('initial');
     setUploadProgress(0);
+    setHasSeenInstructions(false); // Reset so instructions show again on next recording
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -175,67 +225,147 @@ export function VideoEvidenceUploader({
   // Render based on mode
   if (mode === 'initial') {
     return (
-      <div className="mt-4 p-4 border rounded-lg space-y-3">
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            onClick={handleStartRecording}
-            variant="outline"
-            className="flex-1"
-          >
-            <Video className="h-4 w-4 mr-2" />
-            Record Video
-          </Button>
-          <Button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            variant="outline"
-            className="flex-1"
-          >
-            <Upload className="h-4 w-4 mr-2" />
-            Upload File
-          </Button>
+      <>
+        <div className="mt-4 p-4 border rounded-lg space-y-3">
+          {/* Mobile: Stack vertically */}
+          <div className="flex flex-col md:hidden gap-2">
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                onClick={handleStartRecording}
+                variant="outline"
+                className="flex-1 min-h-[44px]"
+              >
+                <Video className="h-4 w-4 mr-2" />
+                Record Video
+              </Button>
+              <Button
+                type="button"
+                onClick={() => setShowInstructions(true)}
+                variant="outline"
+                size="icon"
+                className="min-h-[44px] min-w-[44px]"
+                title="Recording Tips"
+              >
+                <CircleHelp className="h-4 w-4" />
+              </Button>
+            </div>
+            <Button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              variant="outline"
+              className="w-full min-h-[44px]"
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              Upload File
+            </Button>
+          </div>
+          {/* Desktop: Horizontal layout */}
+          <div className="hidden md:flex gap-2">
+            <div className="flex-1 flex gap-2">
+              <Button
+                type="button"
+                onClick={handleStartRecording}
+                variant="outline"
+                className="flex-1"
+              >
+                <Video className="h-4 w-4 mr-2" />
+                Record Video
+              </Button>
+              <Button
+                type="button"
+                onClick={() => setShowInstructions(true)}
+                variant="outline"
+                size="icon"
+                title="Recording Tips"
+              >
+                <CircleHelp className="h-4 w-4" />
+              </Button>
+            </div>
+            <Button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              variant="outline"
+              className="flex-1"
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              Upload File
+            </Button>
+          </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="video/*"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
         </div>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="video/*"
-          onChange={handleFileSelect}
-          className="hidden"
+        <VideoInstructionModal
+          isOpen={showInstructions}
+          onClose={handleInstructionsClose}
         />
-      </div>
+      </>
     );
   }
 
   if (mode === 'recording') {
     return (
-      <div className="mt-4 p-4 border rounded-lg space-y-3">
-        <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden">
-          <Webcam
-            ref={webcamRef}
-            audio={true}
-            videoConstraints={{
-              width: 1280,
-              height: 720,
-              facingMode: 'user',
-            }}
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute top-2 left-2 flex items-center gap-2 bg-red-600 text-white px-3 py-1 rounded-full">
-            <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
-            <span className="text-sm font-medium">Recording</span>
+      <>
+        <div className="mt-4 p-4 border rounded-lg space-y-3">
+          <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden">
+            <Webcam
+              ref={webcamRef}
+              audio={true}
+              videoConstraints={{
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+                facingMode: facingMode,
+              }}
+              className="w-full h-full object-cover"
+              onUserMedia={() => {
+                // Stream is ready, recording will start via useEffect
+              }}
+              onUserMediaError={(error) => {
+                console.error('Webcam error:', error);
+                toast.error('Camera access denied. Please check your browser settings or use the \'Upload File\' option instead.');
+                setMode('initial');
+                setShouldStartRecording(false);
+              }}
+            />
+            {mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording' && (
+              <div className="absolute top-2 left-2 flex items-center gap-2 bg-red-600 text-white px-3 py-1 rounded-full">
+                <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                <span className="text-sm font-medium">Recording</span>
+              </div>
+            )}
+            <Button
+              type="button"
+              onClick={handleFlipCamera}
+              variant="secondary"
+              size="icon"
+              className="absolute top-2 right-2 h-11 w-11 bg-black/50 hover:bg-black/70 text-white border-0"
+              title="Flip Camera"
+              disabled={mediaRecorderRef.current?.state === 'recording'}
+            >
+              <RotateCcw className="h-5 w-5" />
+            </Button>
           </div>
+          <Button
+            type="button"
+            onClick={handleStopRecording}
+            variant="destructive"
+            className="w-full min-h-[44px]"
+            disabled={!mediaRecorderRef.current || mediaRecorderRef.current.state !== 'recording'}
+          >
+            <Square className="h-4 w-4 mr-2" />
+            Stop Recording
+          </Button>
         </div>
-        <Button
-          type="button"
-          onClick={handleStopRecording}
-          variant="destructive"
-          className="w-full"
-        >
-          <Square className="h-4 w-4 mr-2" />
-          Stop Recording
-        </Button>
-      </div>
+        <VideoInstructionModal
+          isOpen={showInstructions}
+          onClose={handleInstructionsClose}
+        />
+      </>
     );
   }
 
@@ -253,12 +383,12 @@ export function VideoEvidenceUploader({
             />
           </div>
         )}
-        <div className="flex gap-2">
+        <div className="flex flex-col md:flex-row gap-2">
           <Button
             type="button"
             onClick={handleRetake}
             variant="outline"
-            className="flex-1"
+            className="flex-1 w-full md:w-auto min-h-[44px]"
           >
             <X className="h-4 w-4 mr-2" />
             Retake
@@ -266,7 +396,7 @@ export function VideoEvidenceUploader({
           <Button
             type="button"
             onClick={handleUpload}
-            className="flex-1"
+            className="flex-1 w-full md:w-auto min-h-[44px]"
           >
             <CheckCircle2 className="h-4 w-4 mr-2" />
             Confirm & Upload
@@ -298,25 +428,40 @@ export function VideoEvidenceUploader({
 
   if (mode === 'completed') {
     return (
-      <div className="mt-4 p-4 border rounded-lg bg-green-50 border-green-200 space-y-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-5 w-5 text-green-600" />
-            <span className="text-sm font-medium text-green-900">Video Attached</span>
+      <>
+        <div className="mt-4 p-4 border rounded-lg bg-green-50 border-green-200 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-green-600" />
+              <span className="text-sm font-medium text-green-900">Video Attached</span>
+            </div>
+            <Button
+              type="button"
+              onClick={handleRemove}
+              variant="ghost"
+              size="sm"
+            >
+              <X className="h-4 w-4 mr-1" />
+              Remove
+            </Button>
           </div>
-          <Button
-            type="button"
-            onClick={handleRemove}
-            variant="ghost"
-            size="sm"
-          >
-            <X className="h-4 w-4 mr-1" />
-            Remove
-          </Button>
         </div>
-      </div>
+        <VideoInstructionModal
+          isOpen={showInstructions}
+          onClose={handleInstructionsClose}
+        />
+      </>
     );
   }
 
-  return null;
+  return (
+    <>
+      {showInstructions && (
+        <VideoInstructionModal
+          isOpen={showInstructions}
+          onClose={handleInstructionsClose}
+        />
+      )}
+    </>
+  );
 }

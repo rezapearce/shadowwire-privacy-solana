@@ -56,6 +56,39 @@ export async function submitClinicalReview(
       };
     }
 
+    // Fetch screening to get family_id before updating
+    const { data: screeningData, error: screeningFetchError } = await db
+      .from('screenings')
+      .select('family_id')
+      .eq('id', screeningId)
+      .single();
+
+    if (screeningFetchError || !screeningData) {
+      console.error('Error fetching screening:', screeningFetchError);
+      return {
+        success: false,
+        error: `Failed to fetch screening: ${screeningFetchError?.message || 'Screening not found'}`,
+      };
+    }
+
+    // Get parent user_id from profiles table using family_id
+    let parentUserId: string | null = null;
+    if (screeningData.family_id) {
+      const { data: parentData, error: parentError } = await db
+        .from('profiles')
+        .select('id')
+        .eq('family_id', screeningData.family_id)
+        .eq('role', 'parent')
+        .limit(1)
+        .single();
+
+      if (!parentError && parentData) {
+        parentUserId = parentData.id;
+      } else {
+        console.warn('Parent user not found for family_id:', screeningData.family_id);
+      }
+    }
+
     // Update screenings table
     const { data, error } = await db
       .from('screenings')
@@ -88,6 +121,23 @@ export async function submitClinicalReview(
         success: false,
         error: 'Failed to submit clinical review: No record updated',
       };
+    }
+
+    // Insert notification for the parent (non-blocking)
+    if (parentUserId && supabaseServer) {
+      try {
+        await supabaseServer
+          .from('notifications')
+          .insert({
+            user_id: parentUserId,
+            screening_id: screeningId,
+            title: 'Results Ready',
+            message: 'Dr. Smith has completed the review. Click to view the official report.',
+          });
+      } catch (notificationError) {
+        // Log error but don't fail the main operation
+        console.error('Failed to create notification:', notificationError);
+      }
     }
 
     // Revalidate the report page path

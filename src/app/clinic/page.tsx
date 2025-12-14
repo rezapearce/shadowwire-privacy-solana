@@ -9,6 +9,7 @@ import { getClinicScreenings } from '@/app/actions/getClinicScreenings';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ClinicSkeleton } from '@/components/skeletons/ClinicSkeleton';
 
 export default function ClinicPage() {
   const router = useRouter();
@@ -125,6 +126,10 @@ export default function ClinicPage() {
       router.push(`/clinic/report/${screeningId}`);
     }
   };
+
+  if (loading) {
+    return <ClinicSkeleton />;
+  }
 
   return (
     <div className="container mx-auto p-6 space-y-6">
