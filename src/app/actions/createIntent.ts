@@ -254,37 +254,9 @@ export async function createPaymentIntent(
 
     const intentId = insertedIntent.intent_id;
 
-    // Start processing the intent (non-blocking)
-    // We don't await this to avoid blocking the response
-    IntentSolver.getInstance()
-      .processIntent(intentId)
-      .catch((error) => {
-        console.error(`Error processing intent ${intentId}:`, error);
-        // Update intent status to FAILED if processing fails
-        // Create admin client for the update operation
-        const supabaseAdminUpdate = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL!,
-          process.env.SUPABASE_SERVICE_ROLE_KEY!,
-          {
-            auth: {
-              autoRefreshToken: false,
-              persistSession: false
-            }
-          }
-        );
-        supabaseAdminUpdate
-          .from('payment_intents')
-          .update({
-            status: 'FAILED',
-            failure_reason: error instanceof Error ? error.message : 'Unknown error during processing',
-          })
-          .eq('intent_id', intentId)
-          .then(({ error: updateError }) => {
-            if (updateError) {
-              console.error(`Failed to update intent ${intentId} status to FAILED:`, updateError);
-            }
-          });
-      });
+    // Note: Processing is now handled by the client calling processPaymentIntent()
+    // This ensures it works correctly on Vercel serverless functions
+    // The client will call processPaymentIntent() after receiving the intentId
 
     // Revalidate the path to update UI
     revalidatePath('/');

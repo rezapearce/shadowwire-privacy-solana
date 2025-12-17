@@ -6,6 +6,7 @@ import { useWallet, useConnection } from '@solana/wallet-adapter-react';
 import { Transaction, SystemProgram, LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
 import { useFamilyStore } from '@/store/useFamilyStore';
 import { createPaymentIntent, getPaymentIntentStatus } from '@/app/actions/createIntent';
+import { processPaymentIntent } from '@/app/actions/processIntent';
 import { IntentInputMethod, IntentStatus } from '@/types';
 import {
   Dialog,
@@ -460,6 +461,21 @@ export function ClinicPaymentModal({ isOpen: controlledIsOpen, onOpenChange, scr
 
       console.log(`Payment intent created successfully: ${result.intentId}, txHash: ${txHash || 'N/A'}`);
       setIntentId(result.intentId);
+      
+      // Process the intent in a separate server action (required for Vercel serverless)
+      // This ensures the processing completes even if the createPaymentIntent function terminates
+      processPaymentIntent(result.intentId)
+        .then((processResult) => {
+          if (!processResult.success) {
+            console.error('Error processing intent:', processResult.error);
+            // Don't show error toast here - polling will catch the FAILED status
+          }
+        })
+        .catch((error) => {
+          console.error('Error calling processPaymentIntent:', error);
+          // Don't show error toast here - polling will catch the FAILED status
+        });
+      
       startPolling(result.intentId);
       toast.success('Payment initiated');
     } catch (error) {
