@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Loader2, ArrowLeft, Shield, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Loader2, ArrowLeft, Shield, CheckCircle2, AlertCircle, Maximize2, Minimize2, ShieldCheck } from 'lucide-react';
 import { getClinicalReport, ClinicalReport } from '@/app/actions/getClinicalReport';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ClinicalAssessmentForm } from '@/components/clinic/ClinicalAssessmentForm';
+import { SplitViewClinicalForm } from '@/components/clinic/SplitViewClinicalForm';
 import { VideoPlayer, VideoBookmark } from '@/components/clinic/VideoPlayer';
 import { DenverResultsChart } from '@/components/clinic/DenverResultsChart';
 import { AIInsightsCard } from '@/components/clinic/AIInsightsCard';
@@ -21,6 +21,7 @@ export default function ClinicalReportPage() {
   const [report, setReport] = useState<ClinicalReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [bookmarks, setBookmarks] = useState<VideoBookmark[]>([]);
+  const [isFocusMode, setIsFocusMode] = useState(false);
 
   useEffect(() => {
     const fetchReport = async () => {
@@ -109,58 +110,57 @@ export default function ClinicalReportPage() {
   const hasClinicalReview = !!report.clinical_review;
 
   return (
-    <div className="container mx-auto p-6 space-y-6 bg-slate-50 min-h-screen">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <h1 className="text-3xl font-bold text-teal-900">
-            Clinical Review: Screening #{getShortId(screeningId)}
+    <div className={`min-h-screen transition-colors duration-300 ${isFocusMode ? 'bg-white' : 'bg-slate-50/50'}`}>
+      {/* Sticky Header */}
+      <header className="sticky top-0 z-20 bg-white border-b px-8 py-3 flex justify-between items-center shadow-sm">
+        <div className="flex items-center gap-4">
+          <h1 className="text-lg font-bold text-slate-900">
+            {isFocusMode ? 'Focus Mode' : 'Clinical Review'}: {report.child_name}
           </h1>
-          <Badge className="bg-teal-600 text-white border-teal-700">
-            <Shield className="h-3 w-3 mr-1" />
-            Settled via Shielded Pool
-          </Badge>
-        </div>
-        <Button onClick={() => router.push('/clinic')} variant="outline">
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Dashboard
-        </Button>
-      </div>
-
-      {/* Three-Column Grid Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Denver II Domain Scores */}
-        <div className="lg:col-span-3 space-y-4">
-          <DenverResultsChart
-            aiScores={{
-              social_score_ai: report.social_score_ai,
-              fine_motor_score_ai: report.fine_motor_score_ai,
-              language_score_ai: report.language_score_ai,
-              gross_motor_score_ai: report.gross_motor_score_ai,
-            }}
-            clinicalScores={report.clinical_review ? {
-              social_score_clinical: report.clinical_review.social_score_clinical,
-              fine_motor_clinical: report.clinical_review.fine_motor_clinical,
-              language_clinical: report.clinical_review.language_clinical,
-              gross_motor_clinical: report.clinical_review.gross_motor_clinical,
-            } : undefined}
-            showComparison={hasClinicalReview}
-          />
+          {!isFocusMode && (
+            <span className="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-1 rounded">
+              Age: {report.child_age_months}mo
+            </span>
+          )}
         </div>
 
-        {/* Center Column: Video Evidence Player (Primary Focus) */}
-        <div className="lg:col-span-6 space-y-4">
-          <Card className="border-teal-200">
-            <CardHeader>
-              <CardTitle>Video Evidence</CardTitle>
-              <CardDescription>
-                Parent-provided video evidence for clinical review
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+        <div className="flex items-center gap-4">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setIsFocusMode(!isFocusMode)}
+            className="flex items-center gap-2 border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+          >
+            {isFocusMode ? (
+              <> <Minimize2 className="w-4 h-4" /> Exit Focus </>
+            ) : (
+              <> <Maximize2 className="w-4 h-4" /> Focus Mode </>
+            )}
+          </Button>
+          {!isFocusMode && (
+            <Badge className="bg-teal-600 text-white border-teal-700">
+              <ShieldCheck className="h-3 w-3 mr-1" />
+              Settled via Shielded Pool
+            </Badge>
+          )}
+          <Button onClick={() => router.push('/clinic')} variant="outline" size="sm">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
+        </div>
+      </header>
+
+      <main className={`transition-all duration-500 ease-in-out mx-auto p-8 ${isFocusMode ? 'max-w-4xl' : 'max-w-[1600px]'}`}>
+        <div className="grid grid-cols-12 gap-8">
+          
+          {/* MAIN STAGE (Left Column - 2/3 width, expands to full in Focus Mode) */}
+          <div className={`transition-all duration-500 ${isFocusMode ? 'col-span-12' : 'col-span-12 lg:col-span-8'} space-y-8`}>
+            
+            {/* Video Section */}
+            <section className={`bg-black rounded-2xl overflow-hidden shadow-2xl transition-all duration-500 ${isFocusMode ? 'aspect-[21/9]' : 'aspect-video'}`}>
               <VideoPlayer 
                 src={primaryVideoUrl} 
-                className="w-full aspect-video"
+                className="w-full"
                 showControls={true}
                 onBookmark={(bookmark) => setBookmarks((prev) => [...prev, bookmark])}
                 bookmarks={bookmarks}
@@ -174,96 +174,153 @@ export default function ClinicalReportPage() {
                   },
                 }}
               />
-              {primaryVideoUrl && (
-                <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-                  <p className="text-sm text-blue-700">
-                    <strong>Note:</strong> Review the video evidence carefully to validate AI findings.
-                  </p>
-                </div>
-              )}
-              {!primaryVideoUrl && (
-                <div className="mt-4 p-4 bg-yellow-50 rounded-lg">
-                  <p className="text-sm text-yellow-700">
-                    No video evidence available for this screening.
-                  </p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+            </section>
 
-        {/* Right Column: AI Insights + Clinical Review Form */}
-        <div className="lg:col-span-3 space-y-4">
-          <AIInsightsCard
-            insights={{
-              ai_risk_score: report.ai_risk_score,
-              ai_summary: report.ai_summary,
-              social_score_ai: report.social_score_ai,
-              fine_motor_score_ai: report.fine_motor_score_ai,
-              language_score_ai: report.language_score_ai,
-              gross_motor_score_ai: report.gross_motor_score_ai,
-            }}
-            clinicalAssessment={report.clinical_review ? {
-              risk_level: report.clinical_risk_level,
-              social_score_clinical: report.clinical_review.social_score_clinical,
-              fine_motor_clinical: report.clinical_review.fine_motor_clinical,
-              language_clinical: report.clinical_review.language_clinical,
-              gross_motor_clinical: report.clinical_review.gross_motor_clinical,
-            } : undefined}
-          />
-
-          {/* Clinical Review Form or Completed Review */}
-          {!hasClinicalReview ? (
-            <ClinicalAssessmentForm screeningId={screeningId} bookmarks={bookmarks} />
-          ) : (
-            <Card className="border-teal-200">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-teal-900">
-                  <CheckCircle2 className="h-5 w-5 text-green-600" />
-                  Review Completed
-                </CardTitle>
-                <CardDescription>
-                  Clinical assessment finalized on {report.reviewed_at ? formatDate(report.reviewed_at) : 'N/A'}
-                  {report.reviewed_by && ` by ${report.reviewed_by}`}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {report.clinical_review.final_diagnosis && (
-                  <div>
-                    <p className="text-sm font-semibold text-teal-900 mb-1">Final Diagnosis</p>
-                    <p className="text-sm text-gray-700">{report.clinical_review.final_diagnosis}</p>
+            {/* Assessment Section - Wide & Comfortable */}
+            {!hasClinicalReview ? (
+              <section className={`bg-white rounded-2xl border transition-shadow ${isFocusMode ? 'shadow-none border-transparent' : 'shadow-sm border-slate-200'}`}>
+                {!isFocusMode && (
+                  <div className="p-4 border-b bg-slate-50/50">
+                    <h2 className="font-bold text-slate-800 uppercase text-[10px] tracking-widest">Assessment Canvas</h2>
                   </div>
                 )}
-                {report.clinical_review.recommendations && (
-                  <div className="pt-4 border-t">
-                    <p className="text-sm font-semibold text-teal-900 mb-2">Recommendations</p>
-                    <p className="text-sm leading-relaxed text-gray-700 whitespace-pre-wrap">
-                      {report.clinical_review.recommendations}
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                <div className={`${isFocusMode ? 'py-4' : 'p-8'}`}>
+                  <SplitViewClinicalForm 
+                    screeningId={screeningId} 
+                    bookmarks={bookmarks}
+                    childName={report.child_name}
+                    aiScores={{
+                      social: report.social_score_ai,
+                      fineMotor: report.fine_motor_score_ai,
+                      language: report.language_score_ai,
+                      grossMotor: report.gross_motor_score_ai,
+                    }}
+                    compact={isFocusMode}
+                  />
+                </div>
+              </section>
+            ) : (
+              <section className="bg-white rounded-2xl shadow-sm border border-slate-200">
+                <div className="p-6 border-b bg-slate-50/50">
+                  <h2 className="font-bold text-slate-800 uppercase text-xs tracking-widest">
+                    Clinical Decision Support
+                  </h2>
+                </div>
+                <div className="p-8">
+                  <Card className="border-teal-200">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 text-teal-900">
+                        <CheckCircle2 className="h-5 w-5 text-green-600" />
+                        Review Completed
+                      </CardTitle>
+                      <CardDescription>
+                        Clinical assessment finalized on {report.reviewed_at ? formatDate(report.reviewed_at) : 'N/A'}
+                        {report.reviewed_by && ` by ${report.reviewed_by}`}
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {report.clinical_review.final_diagnosis && (
+                        <div>
+                          <p className="text-sm font-semibold text-teal-900 mb-1">Final Diagnosis</p>
+                          <p className="text-sm text-gray-700">{report.clinical_review.final_diagnosis}</p>
+                        </div>
+                      )}
+                      {report.clinical_review.recommendations && (
+                        <div className="pt-4 border-t">
+                          <p className="text-sm font-semibold text-teal-900 mb-2">Recommendations</p>
+                          <p className="text-sm leading-relaxed text-gray-700 whitespace-pre-wrap">
+                            {report.clinical_review.recommendations}
+                          </p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </div>
+              </section>
+            )}
+          </div>
+
+          {/* SIDEBAR (Right Column - 1/3 width, hidden in Focus Mode) */}
+          {!isFocusMode && (
+            <div className="col-span-12 lg:col-span-4 space-y-8 animate-in fade-in slide-in-from-right-4">
+              {/* AI Insights Card */}
+              <AIInsightsCard
+                insights={{
+                  ai_risk_score: report.ai_risk_score,
+                  ai_summary: report.ai_summary,
+                  social_score_ai: report.social_score_ai,
+                  fine_motor_score_ai: report.fine_motor_score_ai,
+                  language_score_ai: report.language_score_ai,
+                  gross_motor_score_ai: report.gross_motor_score_ai,
+                }}
+                clinicalAssessment={report.clinical_review ? {
+                  risk_level: report.clinical_risk_level,
+                  social_score_clinical: report.clinical_review.social_score_clinical,
+                  fine_motor_clinical: report.clinical_review.fine_motor_clinical,
+                  language_clinical: report.clinical_review.language_clinical,
+                  gross_motor_clinical: report.clinical_review.gross_motor_clinical,
+                } : undefined}
+              />
+              
+              {/* Denver II Domain Progress */}
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <h3 className="text-xs font-bold text-slate-900 mb-4 uppercase tracking-wider">
+                  Denver II Milestones
+                </h3>
+                <DenverResultsChart
+                  aiScores={{
+                    social_score_ai: report.social_score_ai,
+                    fine_motor_score_ai: report.fine_motor_score_ai,
+                    language_score_ai: report.language_score_ai,
+                    gross_motor_score_ai: report.gross_motor_score_ai,
+                  }}
+                  clinicalScores={report.clinical_review ? {
+                    social_score_clinical: report.clinical_review.social_score_clinical,
+                    fine_motor_clinical: report.clinical_review.fine_motor_clinical,
+                    language_clinical: report.clinical_review.language_clinical,
+                    gross_motor_clinical: report.clinical_review.gross_motor_clinical,
+                  } : undefined}
+                  showComparison={hasClinicalReview}
+                />
+                <p className="mt-4 text-[10px] text-slate-400 italic">
+                  Compare AI mastery detection with clinical observation.
+                </p>
+              </div>
+
+              {/* Parent History / Quick Actions */}
+              <div className="bg-indigo-600 p-6 rounded-2xl text-white shadow-lg shadow-indigo-100">
+                <h4 className="font-bold mb-2 text-sm">Parent's Primary Concern</h4>
+                <p className="text-sm text-indigo-100 leading-relaxed italic">
+                  "{report.clinical_notes || 'No notes provided by parent.'}"
+                </p>
+              </div>
+            </div>
           )}
         </div>
-      </div>
+      </main>
 
       {/* Privacy Footer */}
-      <Card className="border-teal-200 bg-teal-50/50">
-        <CardContent className="pt-6 pb-6">
-          <div className="flex items-start gap-3">
-            <Shield className="h-5 w-5 text-teal-600 mt-0.5 flex-shrink-0" />
-            <div className="flex-1">
-              <p className="text-sm font-semibold text-teal-900 mb-2">
-                Privacy Note
-              </p>
-              <p className="text-sm text-teal-700 leading-relaxed">
-                Identity Protected. This record was accessed via Zcash-shielded settlement. Parent wallet unknown.
-              </p>
-            </div>
+      {!isFocusMode && (
+        <footer className="border-t bg-white">
+          <div className="max-w-[1600px] mx-auto px-8 py-6">
+            <Card className="border-teal-200 bg-teal-50/50">
+              <CardContent className="pt-6 pb-6">
+                <div className="flex items-start gap-3">
+                  <Shield className="h-5 w-5 text-teal-600 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-teal-900 mb-2">
+                      Privacy Note
+                    </p>
+                    <p className="text-sm text-teal-700 leading-relaxed">
+                      Identity Protected. This record was accessed via Zcash-shielded settlement. Parent wallet unknown.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
+        </footer>
+      )}
     </div>
   );
 }
