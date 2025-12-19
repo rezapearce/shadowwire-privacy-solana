@@ -2,6 +2,7 @@
 
 import { db, supabaseServer } from '@/lib/supabase-server';
 import { revalidatePath } from 'next/cache';
+import { generateClinicalReviewHash } from '@/lib/verification/hashGenerator';
 
 export interface SubmitClinicalReviewResult {
   success: boolean;
@@ -14,12 +15,21 @@ export interface SubmitClinicalReviewResult {
  * @param screeningId - UUID of the screening record
  * @param notes - Clinical notes and recommendations from the doctor
  * @param riskLevel - Final clinical risk assessment: 'LOW', 'MODERATE', or 'HIGH'
+ * @param domainScores - Optional domain-specific clinical scores
+ * @param finalDiagnosis - Optional final diagnosis text
  * @returns Result object with success status or error message
  */
 export async function submitClinicalReview(
   screeningId: string,
   notes: string,
-  riskLevel: 'LOW' | 'MODERATE' | 'HIGH'
+  riskLevel: 'LOW' | 'MODERATE' | 'HIGH',
+  domainScores?: {
+    social_score_clinical?: number;
+    fine_motor_clinical?: number;
+    language_clinical?: number;
+    gross_motor_clinical?: number;
+  },
+  finalDiagnosis?: string
 ): Promise<SubmitClinicalReviewResult> {
   // Log server action invocation and client type
   console.log('[clinical-review] server action called');
@@ -82,12 +92,82 @@ export async function submitClinicalReview(
     }
     console.log('[clinical-review] found screening, family_id:', screeningData.family_id);
 
-    // 3. Update the Screening (The Medical Record)
+    // 3. Insert into clinical_reviews table (separates AI from doctor diagnosis)
+    const reviewData: any = {
+      screening_id: screeningId,
+      pediatrician_id: null, // TODO: Get from auth context when available
+      final_diagnosis: finalDiagnosis || riskLevel,
+      recommendations: notes,
+      is_published: false,
+    };
+
+    // Add domain scores if provided
+    if (domainScores) {
+      if (domainScores.social_score_clinical !== undefined) {
+        reviewData.social_score_clinical = domainScores.social_score_clinical;
+      }
+      if (domainScores.fine_motor_clinical !== undefined) {
+        reviewData.fine_motor_clinical = domainScores.fine_motor_clinical;
+      }
+      if (domainScores.language_clinical !== undefined) {
+        reviewData.language_clinical = domainScores.language_clinical;
+      }
+      if (domainScores.gross_motor_clinical !== undefined) {
+        reviewData.gross_motor_clinical = domainScores.gross_motor_clinical;
+      }
+    }
+
+    const { data: insertedReview, error: insertError } = await db
+      .from('clinical_reviews')
+      .insert(reviewData)
+      .select('review_id, created_at')
+      .single();
+
+    if (insertError || !insertedReview) {
+      console.error('[clinical-review] supabase error (insert clinical_review):', insertError);
+      return { success: false, error: 'Failed to create clinical review' };
+    }
+    console.log('[clinical-review] clinical review inserted successfully, review_id:', insertedReview.review_id);
+
+    // 3a. Generate integrity hash and update payment_intent
+    try {
+      const hashData = {
+        screeningId: screeningId,
+        reviewId: insertedReview.review_id,
+        finalDiagnosis: reviewData.final_diagnosis,
+        recommendations: reviewData.recommendations,
+        socialScoreClinical: reviewData.social_score_clinical ?? null,
+        fineMotorClinical: reviewData.fine_motor_clinical ?? null,
+        languageClinical: reviewData.language_clinical ?? null,
+        grossMotorClinical: reviewData.gross_motor_clinical ?? null,
+        reviewedAt: insertedReview.created_at,
+      };
+
+      const integrityHash = await generateClinicalReviewHash(hashData);
+      console.log('[clinical-review] generated integrity hash:', integrityHash.substring(0, 16) + '...');
+
+      // Find payment_intent for this screening and update with hash
+      const { error: paymentUpdateError } = await db
+        .from('payment_intents')
+        .update({ clinical_review_hash: integrityHash })
+        .eq('screening_id', screeningId)
+        .eq('status', 'SETTLED');
+
+      if (paymentUpdateError) {
+        console.warn('[clinical-review] failed to update payment_intent with hash:', paymentUpdateError);
+        // Don't fail - hash generation succeeded but update failed
+      } else {
+        console.log('[clinical-review] payment_intent updated with integrity hash');
+      }
+    } catch (hashError) {
+      console.error('[clinical-review] error generating integrity hash:', hashError);
+      // Don't fail - hash generation is optional for now
+    }
+
+    // 4. Update the Screening status to COMPLETED
     const { error: updateError } = await db
       .from('screenings')
       .update({
-        clinical_notes: notes,
-        clinical_risk_level: riskLevel,
         status: 'COMPLETED',
         reviewed_at: new Date().toISOString(),
         reviewed_by: 'Dr. Smith (Demo)',
@@ -95,12 +175,14 @@ export async function submitClinicalReview(
       .eq('id', screeningId);
 
     if (updateError) {
-      console.error('[clinical-review] supabase error (update):', updateError);
-      return { success: false, error: 'Failed to update screening' };
+      console.error('[clinical-review] supabase error (update screening status):', updateError);
+      // Don't fail - review was already created
+      console.warn('[clinical-review] warning: review created but screening status update failed');
+    } else {
+      console.log('[clinical-review] screening status updated to COMPLETED');
     }
-    console.log('[clinical-review] screening updated successfully');
 
-    // 4. TRIGGER NOTIFICATION (The Critical Part)
+    // 5. TRIGGER NOTIFICATION (The Critical Part)
     // Use supabaseServer for notification (must bypass RLS)
     const notificationClient = supabaseServer ?? db;
     
@@ -135,7 +217,7 @@ export async function submitClinicalReview(
       }
     }
 
-    // 5. Revalidate and Return
+    // 6. Revalidate and Return
     revalidatePath(`/clinic/report/${screeningId}`);
     return { success: true };
 

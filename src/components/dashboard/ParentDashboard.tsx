@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { QrCode, Stethoscope, CheckCircle2, Clock, AlertCircle, AlertTriangle } from 'lucide-react';
+import { QrCode, Stethoscope, CheckCircle2, Clock, AlertCircle, AlertTriangle, Loader2 } from 'lucide-react';
 import { useFamilyStore } from '@/store/useFamilyStore';
 import { signWithMPC } from '@/lib/zenrock/mpc';
 import { getFamilyScreenings } from '@/app/actions/submitScreening';
@@ -17,6 +17,8 @@ import { UnifiedActivityList } from '@/components/dashboard/UnifiedActivityList'
 import { WalletFaucet } from '@/components/dashboard/WalletFaucet';
 import { WalletConnectButton } from '@/components/dashboard/WalletConnectButton';
 import { ScreeningHistory } from '@/components/screening/ScreeningHistory';
+import ScreeningList from '@/components/dashboard/ScreeningList';
+import { useScreeningRealtime } from '@/hooks/useScreeningRealtime';
 import { DashboardSkeleton } from '@/components/skeletons/DashboardSkeleton';
 import { NotificationBell } from '@/components/dashboard/NotificationBell';
 
@@ -108,9 +110,12 @@ export function ParentDashboard() {
     setIsPaymentModalOpen(true);
   };
 
-  // Fetch latest screening
+  // Enable real-time updates for screenings
+  useScreeningRealtime(currentUser?.familyId || null);
+
+  // Fetch latest screening and all screenings
   useEffect(() => {
-    const fetchLatestScreening = async () => {
+    const fetchScreenings = async () => {
       if (!currentUser?.familyId) {
         setIsLoadingScreening(false);
         return;
@@ -119,21 +124,29 @@ export function ParentDashboard() {
       try {
         setIsLoadingScreening(true);
         const result = await getFamilyScreenings(currentUser.familyId);
-        if (result.success && result.screenings && result.screenings.length > 0) {
+        if (result.success && result.screenings) {
           // Get the most recent screening
-          setLatestScreening(result.screenings[0]);
+          if (result.screenings.length > 0) {
+            setLatestScreening(result.screenings[0]);
+          } else {
+            setLatestScreening(null);
+          }
+          // Set all screenings for the list
+          setAllScreenings(result.screenings);
         } else {
           setLatestScreening(null);
+          setAllScreenings([]);
         }
       } catch (error) {
-        console.error('Error fetching latest screening:', error);
+        console.error('Error fetching screenings:', error);
         setLatestScreening(null);
+        setAllScreenings([]);
       } finally {
         setIsLoadingScreening(false);
       }
     };
 
-    fetchLatestScreening();
+    fetchScreenings();
   }, [currentUser?.familyId]);
 
   // Refetch screening when modal closes to catch status updates
@@ -545,7 +558,24 @@ export function ParentDashboard() {
 
       {/* Screening History */}
       {currentUser?.familyId && (
-        <ScreeningHistory />
+        <Card className="border-teal-200">
+          <CardHeader>
+            <CardTitle>Screening History</CardTitle>
+            <CardDescription>
+              Track your child&apos;s developmental screenings and clinical reviews
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoadingScreening ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
+                <span className="ml-2 text-muted-foreground">Loading screenings...</span>
+              </div>
+            ) : (
+              <ScreeningList screenings={allScreenings} />
+            )}
+          </CardContent>
+        </Card>
       )}
 
       {/* Unified Transaction History */}

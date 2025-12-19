@@ -32,7 +32,9 @@
     "react-webcam": "^7.2.0",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
-    "zustand": "^5.0.9"
+    "zustand": "^5.0.9",
+    "jspdf": "^2.5.1",
+    "jspdf-autotable": "^3.8.3"
   },
   "devDependencies": {
     "@types/node": "^20",

@@ -20,7 +20,7 @@ export interface ClinicScreening {
 
 /**
  * Server Action to fetch pending screenings for clinic review
- * Returns screenings with status REVIEW_PAID or PENDING_REVIEW
+ * Returns screenings with SETTLED payments that haven't been reviewed yet
  */
 export async function getClinicScreenings(): Promise<{
   success: boolean;
@@ -30,8 +30,29 @@ export async function getClinicScreenings(): Promise<{
   try {
     const { data, error } = await db
       .from('screenings')
-      .select('id, child_name, child_age_months, ai_risk_score, ai_summary, status, created_at, clinical_notes, clinical_risk_level, reviewed_at')
-      .in('status', ['REVIEW_PAID', 'PENDING_REVIEW'])
+      .select(`
+        id,
+        child_name,
+        child_age_months,
+        ai_risk_score,
+        ai_summary,
+        status,
+        created_at,
+        clinical_notes,
+        clinical_risk_level,
+        reviewed_at,
+        payment_intents!inner (
+          status,
+          screening_id
+        ),
+        clinical_reviews (
+          review_id
+        )
+      `)
+      // Filter 1: Only screenings where payment is SETTLED
+      .eq('payment_intents.status', 'SETTLED')
+      // Filter 2: Only screenings that haven't been reviewed yet
+      .is('clinical_reviews', null)
       .order('created_at', { ascending: false });
 
     if (error) {

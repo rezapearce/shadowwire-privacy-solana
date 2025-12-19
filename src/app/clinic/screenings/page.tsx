@@ -162,69 +162,92 @@ export default function ClinicScreeningsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {screenings.map((screening) => {
-                    const riskLevel = getRiskLevel(screening.ai_risk_score);
-                    return (
-                      <tr
-                        key={screening.id}
-                        className="border-b hover:bg-teal-50/50 transition-colors"
-                      >
-                        <td className="py-3 px-4">
-                          <span className="font-semibold">{screening.child_name}</span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="text-sm">{screening.child_age_months} months</span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <Badge
-                            variant={getRiskBadgeVariant(riskLevel)}
-                            className={
-                              riskLevel === 'High'
-                                ? 'bg-red-100 text-red-800 border-red-300'
-                                : 'bg-green-100 text-green-800 border-green-300'
-                            }
-                          >
-                            {riskLevel === 'High' ? (
-                              <>
-                                <AlertCircle className="h-3 w-3 mr-1" />
-                                High Risk
-                              </>
-                            ) : (
-                              <>
-                                <CheckCircle2 className="h-3 w-3 mr-1" />
-                                Low Risk
-                              </>
-                            )}
-                            {screening.ai_risk_score !== null && (
-                              <span className="ml-1">({screening.ai_risk_score}/100)</span>
-                            )}
-                          </Badge>
-                        </td>
-                        <td className="py-3 px-4">
-                          <Badge className={getStatusBadgeColor(screening.status)}>
-                            {screening.status === 'REVIEW_PAID'
-                              ? 'Payment Received'
-                              : 'Pending Review'}
-                          </Badge>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="text-sm text-muted-foreground">
-                            {formatDate(screening.created_at)}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4">
-                          <Button
-                            onClick={() => router.push(`/clinic/report/${screening.id}`)}
-                            className="bg-teal-600 hover:bg-teal-700 text-white"
-                            size="sm"
-                          >
-                            Review
-                            <ArrowRight className="h-4 w-4 ml-2" />
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {screenings
+                    .sort((a, b) => {
+                      // Prioritize High Risk screenings first
+                      const aRisk = getRiskLevel(a.ai_risk_score);
+                      const bRisk = getRiskLevel(b.ai_risk_score);
+                      if (aRisk === 'High' && bRisk !== 'High') return -1;
+                      if (aRisk !== 'High' && bRisk === 'High') return 1;
+                      // Then sort by date (newest first)
+                      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+                    })
+                    .map((screening) => {
+                      const riskLevel = getRiskLevel(screening.ai_risk_score);
+                      return (
+                        <tr
+                          key={screening.id}
+                          className={`border-b hover:bg-teal-50/50 transition-colors ${
+                            riskLevel === 'High' ? 'bg-red-50/30' : ''
+                          }`}
+                        >
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              {riskLevel === 'High' && (
+                                <AlertCircle className="h-4 w-4 text-red-600" />
+                              )}
+                              <span className="font-semibold">{screening.child_name}</span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="text-sm">{screening.child_age_months} months</span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <Badge
+                              variant={getRiskBadgeVariant(riskLevel)}
+                              className={
+                                riskLevel === 'High'
+                                  ? 'bg-red-100 text-red-800 border-red-300'
+                                  : 'bg-green-100 text-green-800 border-green-300'
+                              }
+                            >
+                              {riskLevel === 'High' ? (
+                                <>
+                                  <AlertCircle className="h-3 w-3 mr-1" />
+                                  High Risk
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                                  Low Risk
+                                </>
+                              )}
+                              {screening.ai_risk_score !== null && (
+                                <span className="ml-1">({screening.ai_risk_score}/100)</span>
+                              )}
+                            </Badge>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex flex-col gap-1">
+                              <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-none">
+                                <Shield className="h-3 w-3 mr-1" />
+                                Paid via Zcash
+                              </Badge>
+                              <Badge className={getStatusBadgeColor(screening.status)}>
+                                {screening.status === 'REVIEW_PAID'
+                                  ? 'Payment Received'
+                                  : 'Pending Review'}
+                              </Badge>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <span className="text-sm text-muted-foreground">
+                              {formatDate(screening.created_at)}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4">
+                            <Button
+                              onClick={() => router.push(`/clinic/report/${screening.id}`)}
+                              className="bg-teal-600 hover:bg-teal-700 text-white"
+                              size="sm"
+                            >
+                              Review
+                              <ArrowRight className="h-4 w-4 ml-2" />
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                 </tbody>
               </table>
             </div>

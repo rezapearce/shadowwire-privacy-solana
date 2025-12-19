@@ -325,15 +325,51 @@ export async function submitScreening(
 /**
  * Server Action: Get all screenings for a family from the screenings table
  */
+export interface FamilyScreening {
+  id: string;
+  child_name: string;
+  child_age_months: number;
+  risk_score: number | null;
+  risk_level: 'High' | 'Low';
+  status: 'PENDING_PAYMENT' | 'UNDER_REVIEW' | 'COMPLETED' | 'FAILED';
+  created_at: string;
+  ai_summary: string | null;
+  clinical_notes: string | null;
+  clinical_risk_level: 'LOW' | 'MODERATE' | 'HIGH' | null;
+  reviewed_at: string | null;
+  reviewed_by: string | null;
+  payment_status: string | null;
+  has_clinical_review: boolean;
+}
+
 export async function getFamilyScreenings(
   familyId: string
-): Promise<{ success: boolean; screenings?: any[]; error?: string }> {
+): Promise<{ success: boolean; screenings?: FamilyScreening[]; error?: string }> {
   try {
     const db = supabaseServer || supabaseFallback;
     
     const { data, error } = await db
       .from('screenings')
-      .select('id, child_name, child_age_months, ai_risk_score, ai_summary, status, created_at, clinical_notes, clinical_risk_level, reviewed_at, reviewed_by')
+      .select(`
+        id,
+        child_name,
+        child_age_months,
+        ai_risk_score,
+        ai_summary,
+        status,
+        created_at,
+        clinical_notes,
+        clinical_risk_level,
+        reviewed_at,
+        reviewed_by,
+        payment_intents (
+          status,
+          clinical_review_hash
+        ),
+        clinical_reviews (
+          review_id
+        )
+      `)
       .eq('family_id', familyId)
       .order('created_at', { ascending: false });
 
@@ -345,21 +381,53 @@ export async function getFamilyScreenings(
       };
     }
 
-    // Transform to match expected format
-    const screenings = (data || []).map((screening) => ({
-      id: screening.id,
-      child_name: screening.child_name,
-      child_age_months: screening.child_age_months,
-      risk_score: screening.ai_risk_score,
-      risk_level: screening.ai_risk_score && screening.ai_risk_score >= 50 ? 'High' : 'Low',
-      status: screening.status || 'PENDING_REVIEW',
-      created_at: screening.created_at,
-      ai_summary: screening.ai_summary || null,
-      clinical_notes: screening.clinical_notes || null,
-      clinical_risk_level: screening.clinical_risk_level || null,
-      reviewed_at: screening.reviewed_at || null,
-      reviewed_by: screening.reviewed_by || null,
-    }));
+    // Transform to match expected format with status calculation
+    const screenings: FamilyScreening[] = (data || []).map((screening: any) => {
+      // Determine payment status
+      const paymentIntents = Array.isArray(screening.payment_intents)
+        ? screening.payment_intents
+        : screening.payment_intents
+        ? [screening.payment_intents]
+        : [];
+      
+      const settledPayment = paymentIntents.find((pi: any) => pi.status === 'SETTLED');
+      const paymentStatus = settledPayment?.status || null;
+
+      // Check if clinical review exists
+      const clinicalReviews = Array.isArray(screening.clinical_reviews)
+        ? screening.clinical_reviews
+        : screening.clinical_reviews
+        ? [screening.clinical_reviews]
+        : [];
+      const hasClinicalReview = clinicalReviews.length > 0;
+
+      // Calculate display status
+      let displayStatus: 'PENDING_PAYMENT' | 'UNDER_REVIEW' | 'COMPLETED' | 'FAILED';
+      if (hasClinicalReview) {
+        displayStatus = 'COMPLETED';
+      } else if (paymentStatus === 'SETTLED') {
+        displayStatus = 'UNDER_REVIEW';
+      } else {
+        displayStatus = 'PENDING_PAYMENT';
+      }
+
+      return {
+        id: screening.id,
+        child_name: screening.child_name,
+        child_age_months: screening.child_age_months,
+        risk_score: screening.ai_risk_score,
+        risk_level: screening.ai_risk_score && screening.ai_risk_score >= 50 ? 'High' : 'Low',
+        status: displayStatus,
+        created_at: screening.created_at,
+        ai_summary: screening.ai_summary || null,
+        clinical_notes: screening.clinical_notes || null,
+        clinical_risk_level: screening.clinical_risk_level || null,
+        reviewed_at: screening.reviewed_at || null,
+        reviewed_by: screening.reviewed_by || null,
+        payment_status: paymentStatus,
+        has_clinical_review: hasClinicalReview,
+      };
+    });
 
     return {
       success: true,

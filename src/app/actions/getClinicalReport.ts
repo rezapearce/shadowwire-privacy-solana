@@ -23,6 +23,21 @@ export interface ClinicalReport {
   clinical_risk_level: 'LOW' | 'MODERATE' | 'HIGH' | null;
   reviewed_at: string | null;
   reviewed_by: string | null;
+  // Domain scores
+  social_score_ai: number | null;
+  fine_motor_score_ai: number | null;
+  language_score_ai: number | null;
+  gross_motor_score_ai: number | null;
+  // Clinical review data
+  clinical_review?: {
+    social_score_clinical: number | null;
+    fine_motor_clinical: number | null;
+    language_clinical: number | null;
+    gross_motor_clinical: number | null;
+    final_diagnosis: string | null;
+    recommendations: string | null;
+    is_published: boolean;
+  } | null;
 }
 
 /**
@@ -118,6 +133,21 @@ export async function getClinicalReport(screeningId: string): Promise<{
       })
     );
 
+    // Fetch domain scores and clinical review separately
+    const { data: screeningData, error: screeningError } = await db
+      .from('screenings')
+      .select('social_score_ai, fine_motor_score_ai, language_score_ai, gross_motor_score_ai')
+      .eq('id', screeningId)
+      .single();
+
+    const { data: clinicalReviewData } = await db
+      .from('clinical_reviews')
+      .select('social_score_clinical, fine_motor_clinical, language_clinical, gross_motor_clinical, final_diagnosis, recommendations, is_published')
+      .eq('screening_id', screeningId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
     // Transform the data to match our interface
     const report: ClinicalReport = {
       child_name: data.child_name || '',
@@ -130,6 +160,19 @@ export async function getClinicalReport(screeningId: string): Promise<{
       clinical_risk_level: data.clinical_risk_level || null,
       reviewed_at: data.reviewed_at || null,
       reviewed_by: data.reviewed_by || null,
+      social_score_ai: screeningData?.social_score_ai ?? null,
+      fine_motor_score_ai: screeningData?.fine_motor_score_ai ?? null,
+      language_score_ai: screeningData?.language_score_ai ?? null,
+      gross_motor_score_ai: screeningData?.gross_motor_score_ai ?? null,
+      clinical_review: clinicalReviewData ? {
+        social_score_clinical: clinicalReviewData.social_score_clinical ?? null,
+        fine_motor_clinical: clinicalReviewData.fine_motor_clinical ?? null,
+        language_clinical: clinicalReviewData.language_clinical ?? null,
+        gross_motor_clinical: clinicalReviewData.gross_motor_clinical ?? null,
+        final_diagnosis: clinicalReviewData.final_diagnosis || null,
+        recommendations: clinicalReviewData.recommendations || null,
+        is_published: clinicalReviewData.is_published || false,
+      } : null,
     };
 
     return {

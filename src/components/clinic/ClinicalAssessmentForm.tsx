@@ -3,23 +3,47 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Loader2, CheckCircle2, AlertCircle, AlertTriangle } from 'lucide-react';
+import { Loader2, CheckCircle2, AlertCircle, AlertTriangle, Bookmark } from 'lucide-react';
 import { submitClinicalReview } from '@/app/actions/submitClinicalReview';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { VideoBookmark } from './VideoPlayer';
 
 interface ClinicalAssessmentFormProps {
   screeningId: string;
+  bookmarks?: VideoBookmark[];
 }
 
 type RiskLevel = 'LOW' | 'MODERATE' | 'HIGH';
 
-export function ClinicalAssessmentForm({ screeningId }: ClinicalAssessmentFormProps) {
+export function ClinicalAssessmentForm({ screeningId, bookmarks = [] }: ClinicalAssessmentFormProps) {
   const router = useRouter();
   const [notes, setNotes] = useState('');
   const [riskLevel, setRiskLevel] = useState<RiskLevel | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const insertBookmark = (bookmark: VideoBookmark) => {
+    const bookmarkText = `[${bookmark.timeString}] `;
+    const textarea = document.getElementById('clinical-notes') as HTMLTextAreaElement;
+    if (textarea) {
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const textBefore = notes.substring(0, start);
+      const textAfter = notes.substring(end);
+      const newNotes = textBefore + bookmarkText + textAfter;
+      setNotes(newNotes);
+      
+      // Set cursor position after inserted bookmark
+      setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(start + bookmarkText.length, start + bookmarkText.length);
+      }, 0);
+    } else {
+      // Fallback: append to end
+      setNotes((prev) => prev + (prev ? '\n' : '') + bookmarkText);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -122,16 +146,43 @@ export function ClinicalAssessmentForm({ screeningId }: ClinicalAssessmentFormPr
 
           {/* Clinical Notes */}
           <div className="space-y-2">
-            <label htmlFor="clinical-notes" className="text-sm font-semibold text-teal-900">
-              Clinical Notes & Recommendations <span className="text-red-500">*</span>
-            </label>
+            <div className="flex items-center justify-between">
+              <label htmlFor="clinical-notes" className="text-sm font-semibold text-teal-900">
+                Clinical Notes & Recommendations <span className="text-red-500">*</span>
+              </label>
+              {bookmarks.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <Bookmark className="h-4 w-4 text-teal-600" />
+                  <span className="text-xs text-muted-foreground">
+                    {bookmarks.length} bookmark{bookmarks.length !== 1 ? 's' : ''} available
+                  </span>
+                </div>
+              )}
+            </div>
+            {bookmarks.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-2">
+                {bookmarks.map((bookmark, index) => (
+                  <Button
+                    key={index}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => insertBookmark(bookmark)}
+                    className="text-xs"
+                  >
+                    <Bookmark className="h-3 w-3 mr-1" />
+                    {bookmark.timeString}
+                  </Button>
+                ))}
+              </div>
+            )}
             <textarea
               id="clinical-notes"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               disabled={isSubmitting}
               rows={6}
-              placeholder="Enter your clinical observations, recommendations, and any additional notes..."
+              placeholder="Enter your clinical observations, recommendations, and any additional notes... Click bookmarks above to insert timestamps."
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y min-h-[120px]"
             />
           </div>

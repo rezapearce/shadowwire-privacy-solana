@@ -2,12 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { Loader2, ArrowLeft, Shield, User, FileText, AlertCircle, CheckCircle2, AlertTriangle, Video } from 'lucide-react';
+import { Loader2, ArrowLeft, Shield, CheckCircle2, AlertCircle } from 'lucide-react';
 import { getClinicalReport, ClinicalReport } from '@/app/actions/getClinicalReport';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ClinicalAssessmentForm } from '@/components/clinic/ClinicalAssessmentForm';
+import { VideoPlayer, VideoBookmark } from '@/components/clinic/VideoPlayer';
+import { DenverResultsChart } from '@/components/clinic/DenverResultsChart';
+import { AIInsightsCard } from '@/components/clinic/AIInsightsCard';
 
 export default function ClinicalReportPage() {
   const params = useParams();
@@ -17,6 +20,7 @@ export default function ClinicalReportPage() {
   const [loading, setLoading] = useState(true);
   const [report, setReport] = useState<ClinicalReport | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [bookmarks, setBookmarks] = useState<VideoBookmark[]>([]);
 
   useEffect(() => {
     const fetchReport = async () => {
@@ -53,51 +57,15 @@ export default function ClinicalReportPage() {
     });
   };
 
-  const getRiskLevel = (score: number | null): 'High' | 'Low' => {
-    if (score === null) return 'Low';
-    return score >= 50 ? 'High' : 'Low';
-  };
-
-  const getRiskBadgeVariant = (riskLevel: 'High' | 'Low') => {
-    return riskLevel === 'High' ? 'destructive' : 'default';
-  };
-
-  const getCategoryDisplayName = (category: string): string => {
-    const categoryMap: Record<string, string> = {
-      gross_motor: 'Gross Motor',
-      fine_motor: 'Fine Motor',
-      language: 'Language',
-      personal_social: 'Personal-Social',
-    };
-    return categoryMap[category] || category;
-  };
-
   const getShortId = (uuid: string): string => {
     return uuid.substring(0, 8).toUpperCase();
   };
 
-  const getClinicalRiskLevelColor = (level: 'LOW' | 'MODERATE' | 'HIGH' | null) => {
-    if (!level) return '';
-    switch (level) {
-      case 'LOW':
-        return 'bg-green-100 text-green-800 border-green-300';
-      case 'MODERATE':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-300';
-      case 'HIGH':
-        return 'bg-red-100 text-red-800 border-red-300';
-    }
-  };
-
-  const getClinicalRiskLevelIcon = (level: 'LOW' | 'MODERATE' | 'HIGH' | null) => {
-    if (!level) return null;
-    switch (level) {
-      case 'LOW':
-        return <CheckCircle2 className="h-4 w-4" />;
-      case 'MODERATE':
-        return <AlertTriangle className="h-4 w-4" />;
-      case 'HIGH':
-        return <AlertCircle className="h-4 w-4" />;
-    }
+  // Find the first video URL from answers
+  const getPrimaryVideoUrl = (): string | null => {
+    if (!report?.answers) return null;
+    const answerWithVideo = report.answers.find((answer) => answer.video_url);
+    return answerWithVideo?.video_url || null;
   };
 
   if (loading) {
@@ -137,10 +105,11 @@ export default function ClinicalReportPage() {
     );
   }
 
-  const riskLevel = getRiskLevel(report.ai_risk_score);
+  const primaryVideoUrl = getPrimaryVideoUrl();
+  const hasClinicalReview = !!report.clinical_review;
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-6 space-y-6 bg-slate-50 min-h-screen">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -149,7 +118,7 @@ export default function ClinicalReportPage() {
           </h1>
           <Badge className="bg-teal-600 text-white border-teal-700">
             <Shield className="h-3 w-3 mr-1" />
-            Secure Access
+            Settled via Shielded Pool
           </Badge>
         </div>
         <Button onClick={() => router.push('/clinic')} variant="outline">
@@ -158,197 +127,126 @@ export default function ClinicalReportPage() {
         </Button>
       </div>
 
-      {/* Two-Column Grid Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left Column: Patient Summary Card */}
-        <Card className="border-teal-200">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User className="h-5 w-5 text-teal-600" />
-              Patient Summary
-            </CardTitle>
-            <CardDescription>Screening conducted on {formatDate(report.created_at)}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Child Age */}
-            <div>
-              <p className="text-sm text-muted-foreground mb-1">Child Age</p>
-              <p className="text-2xl font-bold text-teal-900">{report.child_age_months} months</p>
-            </div>
+      {/* Three-Column Grid Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Left Column: Denver II Domain Scores */}
+        <div className="lg:col-span-3 space-y-4">
+          <DenverResultsChart
+            aiScores={{
+              social_score_ai: report.social_score_ai,
+              fine_motor_score_ai: report.fine_motor_score_ai,
+              language_score_ai: report.language_score_ai,
+              gross_motor_score_ai: report.gross_motor_score_ai,
+            }}
+            clinicalScores={report.clinical_review ? {
+              social_score_clinical: report.clinical_review.social_score_clinical,
+              fine_motor_clinical: report.clinical_review.fine_motor_clinical,
+              language_clinical: report.clinical_review.language_clinical,
+              gross_motor_clinical: report.clinical_review.gross_motor_clinical,
+            } : undefined}
+            showComparison={hasClinicalReview}
+          />
+        </div>
 
-            {/* Risk Badge */}
-            <div>
-              <p className="text-sm text-muted-foreground mb-2">Risk Level</p>
-              <Badge 
-                variant={getRiskBadgeVariant(riskLevel)}
-                className={`text-base px-4 py-2 ${
-                  riskLevel === 'High' 
-                    ? 'bg-red-100 text-red-800 border-red-300' 
-                    : 'bg-green-100 text-green-800 border-green-300'
-                }`}
-              >
-                {riskLevel === 'High' ? (
-                  <>
-                    <AlertCircle className="h-4 w-4 mr-2" />
-                    High Risk
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="h-4 w-4 mr-2" />
-                    Low Risk
-                  </>
-                )}
-              </Badge>
-              {report.ai_risk_score !== null && (
-                <p className="text-sm text-muted-foreground mt-2">
-                  AI Risk Score: {report.ai_risk_score} / 100
-                </p>
+        {/* Center Column: Video Evidence Player (Primary Focus) */}
+        <div className="lg:col-span-6 space-y-4">
+          <Card className="border-teal-200">
+            <CardHeader>
+              <CardTitle>Video Evidence</CardTitle>
+              <CardDescription>
+                Parent-provided video evidence for clinical review
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <VideoPlayer 
+                src={primaryVideoUrl} 
+                className="w-full aspect-video"
+                showControls={true}
+                onBookmark={(bookmark) => setBookmarks((prev) => [...prev, bookmark])}
+                bookmarks={bookmarks}
+                aiInsights={{
+                  riskScore: report.ai_risk_score,
+                  domainScores: {
+                    social: report.social_score_ai,
+                    fineMotor: report.fine_motor_score_ai,
+                    language: report.language_score_ai,
+                    grossMotor: report.gross_motor_score_ai,
+                  },
+                }}
+              />
+              {primaryVideoUrl && (
+                <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                  <p className="text-sm text-blue-700">
+                    <strong>Note:</strong> Review the video evidence carefully to validate AI findings.
+                  </p>
+                </div>
               )}
-            </div>
+              {!primaryVideoUrl && (
+                <div className="mt-4 p-4 bg-yellow-50 rounded-lg">
+                  <p className="text-sm text-yellow-700">
+                    No video evidence available for this screening.
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
-            {/* AI Summary */}
-            {report.ai_summary && (
-              <div className="pt-4 border-t">
-                <p className="text-sm font-semibold text-teal-900 mb-2 flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  AI Summary
-                </p>
-                <p className="text-sm leading-relaxed text-gray-700 whitespace-pre-wrap">
-                  {report.ai_summary}
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        {/* Right Column: AI Insights + Clinical Review Form */}
+        <div className="lg:col-span-3 space-y-4">
+          <AIInsightsCard
+            insights={{
+              ai_risk_score: report.ai_risk_score,
+              ai_summary: report.ai_summary,
+              social_score_ai: report.social_score_ai,
+              fine_motor_score_ai: report.fine_motor_score_ai,
+              language_score_ai: report.language_score_ai,
+              gross_motor_score_ai: report.gross_motor_score_ai,
+            }}
+            clinicalAssessment={report.clinical_review ? {
+              risk_level: report.clinical_risk_level,
+              social_score_clinical: report.clinical_review.social_score_clinical,
+              fine_motor_clinical: report.clinical_review.fine_motor_clinical,
+              language_clinical: report.clinical_review.language_clinical,
+              gross_motor_clinical: report.clinical_review.gross_motor_clinical,
+            } : undefined}
+          />
 
-        {/* Right Column: Questionnaire Responses */}
-        <Card className="border-teal-200">
-          <CardHeader>
-            <CardTitle>Questionnaire Responses</CardTitle>
-            <CardDescription>
-              {report.answers.length} questions answered
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-3 px-4 font-semibold text-sm">Category</th>
-                    <th className="text-left py-3 px-4 font-semibold text-sm">Question</th>
-                    <th className="text-left py-3 px-4 font-semibold text-sm">Milestone Age</th>
-                    <th className="text-left py-3 px-4 font-semibold text-sm">Response</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.answers.map((answer, index) => (
-                    <tr
-                      key={index}
-                      className={`border-b hover:bg-teal-50/50 transition-colors ${
-                        !answer.response ? 'bg-orange-50/30' : ''
-                      }`}
-                    >
-                      <td className="py-3 px-4">
-                        <Badge variant="outline" className="border-teal-300 text-teal-700 text-xs">
-                          {getCategoryDisplayName(answer.category)}
-                        </Badge>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="text-sm">{answer.questionText}</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="text-sm text-muted-foreground">
-                          {answer.milestoneAgeMonths} months
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-2">
-                          <Badge
-                            variant={answer.response ? 'default' : 'destructive'}
-                            className={
-                              answer.response
-                                ? 'bg-green-100 text-green-800 border-green-200'
-                                : 'bg-red-100 text-red-800 border-red-200'
-                            }
-                          >
-                            {answer.response ? (
-                              <>
-                                <CheckCircle2 className="h-3 w-3 mr-1" />
-                                Yes
-                              </>
-                            ) : (
-                              <>
-                                <AlertCircle className="h-3 w-3 mr-1" />
-                                No
-                              </>
-                            )}
-                          </Badge>
-                          {answer.video_url && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => window.open(answer.video_url, '_blank')}
-                              className="h-7"
-                            >
-                              <Video className="h-3 w-3 mr-1" />
-                              Watch Video
-                            </Button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+          {/* Clinical Review Form or Completed Review */}
+          {!hasClinicalReview ? (
+            <ClinicalAssessmentForm screeningId={screeningId} bookmarks={bookmarks} />
+          ) : (
+            <Card className="border-teal-200">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-teal-900">
+                  <CheckCircle2 className="h-5 w-5 text-green-600" />
+                  Review Completed
+                </CardTitle>
+                <CardDescription>
+                  Clinical assessment finalized on {report.reviewed_at ? formatDate(report.reviewed_at) : 'N/A'}
+                  {report.reviewed_by && ` by ${report.reviewed_by}`}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {report.clinical_review.final_diagnosis && (
+                  <div>
+                    <p className="text-sm font-semibold text-teal-900 mb-1">Final Diagnosis</p>
+                    <p className="text-sm text-gray-700">{report.clinical_review.final_diagnosis}</p>
+                  </div>
+                )}
+                {report.clinical_review.recommendations && (
+                  <div className="pt-4 border-t">
+                    <p className="text-sm font-semibold text-teal-900 mb-2">Recommendations</p>
+                    <p className="text-sm leading-relaxed text-gray-700 whitespace-pre-wrap">
+                      {report.clinical_review.recommendations}
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
       </div>
-
-      {/* Clinical Assessment Section */}
-      {!report.reviewed_at ? (
-        <ClinicalAssessmentForm screeningId={screeningId} />
-      ) : (
-        <Card className="border-teal-200">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-teal-900">
-              <CheckCircle2 className="h-5 w-5 text-green-600" />
-              Review Completed
-            </CardTitle>
-            <CardDescription>
-              Clinical assessment finalized on {formatDate(report.reviewed_at)}
-              {report.reviewed_by && ` by ${report.reviewed_by}`}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Final Clinical Risk Level */}
-            {report.clinical_risk_level && (
-              <div>
-                <p className="text-sm text-muted-foreground mb-2">Final Clinical Risk Assessment</p>
-                <Badge 
-                  className={`text-base px-4 py-2 ${getClinicalRiskLevelColor(report.clinical_risk_level)}`}
-                >
-                  {getClinicalRiskLevelIcon(report.clinical_risk_level)}
-                  <span className="ml-2">{report.clinical_risk_level}</span>
-                </Badge>
-              </div>
-            )}
-
-            {/* Clinical Notes */}
-            {report.clinical_notes && (
-              <div className="pt-4 border-t">
-                <p className="text-sm font-semibold text-teal-900 mb-2 flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  Clinical Notes & Recommendations
-                </p>
-                <p className="text-sm leading-relaxed text-gray-700 whitespace-pre-wrap">
-                  {report.clinical_notes}
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
 
       {/* Privacy Footer */}
       <Card className="border-teal-200 bg-teal-50/50">
