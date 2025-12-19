@@ -46,6 +46,7 @@ export function ParentDashboard() {
   const [latestScreening, setLatestScreening] = useState<any | null>(null);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isLoadingScreening, setIsLoadingScreening] = useState(true);
+  const [allScreenings, setAllScreenings] = useState<any[]>([]);
 
   const totalFamilyValue = wallet.sol + wallet.usdc + wallet.zenzec;
   const pendingTransactions = transactions.filter((tx) => tx.status === 'pending');
