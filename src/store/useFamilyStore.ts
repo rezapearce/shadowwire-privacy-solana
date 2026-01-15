@@ -21,7 +21,7 @@ export const useFamilyStore = create<FamilyStore>((set, get) => ({
   wallet: {
     sol: 0,
     usdc: 0,
-    zenzec: 0,
+    usd1: 0, // Replaced zenzec with usd1 for ShadowWire privacy
   },
   transactions: [],
 
@@ -70,7 +70,7 @@ export const useFamilyStore = create<FamilyStore>((set, get) => ({
           wallet: {
             sol: Number(walletData.sol_balance) || 0,
             usdc: Number(walletData.usdc_balance) || 0,
-            zenzec: Number(walletData.zenzec_balance) || 0,
+            usd1: Number(walletData.usd1_balance) || 0, // Updated to usd1_balance
           },
         });
       }
@@ -236,30 +236,41 @@ export const useFamilyStore = create<FamilyStore>((set, get) => ({
         return;
       }
 
-      // Call the RPC function to swap USDC to zenZEC
-      const { data, error } = await supabase.rpc('shield_assets_rpc', {
-        user_profile_id: currentUser.id,
-        amount,
-      });
-
-      if (error) {
-        console.error('Error shielding assets:', error);
-        toast.error('Failed to shield assets');
+      if (!currentUser.walletAddress) {
+        toast.error('Wallet address not found');
         return;
       }
 
-      // Check RPC response
-      if (!data || !data.success) {
-        const errorMessage = data?.error || 'Failed to shield assets';
-        console.error('RPC error:', errorMessage);
+      // Convert amount to smallest units (USD1 has 6 decimals)
+      const amountInSmallestUnit = Math.floor(amount * Math.pow(10, 6));
+
+      // Call API to execute privacy transfer
+      const response = await fetch('/api/privacy/transfer', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          walletAddress: currentUser.walletAddress,
+          amount: amountInSmallestUnit,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        const errorMessage = result.error || 'Failed to shield assets';
+        console.error('Privacy transfer error:', errorMessage);
         toast.error(`Shield Failed: ${errorMessage}`);
         return;
       }
 
+      console.log('Privacy transfer completed:', result);
+      
       // Refresh family data to get updated wallet balances
       await get().fetchFamilyData(currentUser.id);
 
-      toast.success('Assets Shielded Successfully');
+      toast.success('Assets Shielded with Bulletproofs Privacy');
     } catch (error) {
       console.error('Error in shieldAssets:', error);
       toast.error('Failed to shield assets');

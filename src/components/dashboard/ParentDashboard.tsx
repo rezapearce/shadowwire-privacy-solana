@@ -48,7 +48,7 @@ export function ParentDashboard() {
   const [isLoadingScreening, setIsLoadingScreening] = useState(true);
   const [allScreenings, setAllScreenings] = useState<any[]>([]);
 
-  const totalFamilyValue = wallet.sol + wallet.usdc + wallet.zenzec;
+  const totalFamilyValue = wallet.sol + wallet.usdc + wallet.usd1;
   const pendingTransactions = transactions.filter((tx) => tx.status === 'pending');
   
   // Debug: Log transactions to console
@@ -486,8 +486,8 @@ export function ParentDashboard() {
               <span className="font-semibold">${wallet.usdc.toFixed(2)}</span>
             </div>
             <div>
-              <span className="text-muted-foreground">zenZEC:</span>{' '}
-              <span className="font-semibold">${wallet.zenzec.toFixed(2)}</span>
+              <span className="text-muted-foreground">USD1:</span>{' '}
+              <span className="font-semibold">${wallet.usd1.toFixed(2)}</span>
             </div>
           </div>
         </CardContent>

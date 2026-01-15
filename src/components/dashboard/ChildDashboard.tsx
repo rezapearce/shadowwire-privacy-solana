@@ -58,18 +58,18 @@ export function ChildDashboard() {
           </CardContent>
         </Card>
 
-        {/* Savings (Shielded) - zenZEC */}
+        {/* Savings (Shielded) - USD1 */}
         <Card className="border-purple-200 bg-purple-50">
           <CardHeader>
             <CardTitle className="text-purple-700 flex items-center gap-2">
               <Lock className="h-5 w-5" />
               Savings (Shielded)
             </CardTitle>
-            <CardDescription>Your zenZEC balance</CardDescription>
+            <CardDescription>Your USD1 balance</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-purple-700">
-              ${wallet.zenzec.toFixed(2)}
+              ${wallet.usd1.toFixed(2)}
             </div>
             <p className="text-sm text-purple-600 mt-2">Protected savings</p>
           </CardContent>

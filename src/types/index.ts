@@ -23,7 +23,7 @@ export interface Transaction {
 export interface WalletState {
   sol: number;
   usdc: number;
-  zenzec: number;
+  usd1: number; // Replaced zenzec with usd1 for ShadowWire privacy
 }
 
 // Intent-Based Payment Engine Types

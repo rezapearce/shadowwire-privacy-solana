@@ -132,17 +132,22 @@ export function SplitViewClinicalForm({
     setIsDrafting(true);
     try {
       const template = getDiagnosisTemplate(selectedDiagnosis);
-      const result = await generateAIDraft(
-        internalNotes,
+      const result = await generateAIDraft({
+        screeningId,
         childName,
-        template?.aiContext
-      );
+        aiScores: {
+          social: aiScores.social,
+          fineMotor: aiScores.fineMotor,
+          language: aiScores.language,
+          grossMotor: aiScores.grossMotor,
+        }
+      });
 
-      if (result.success && result.draft) {
-        setParentRecs(result.draft);
+      if (result.success && 'data' in result && result.data?.draft) {
+        setParentRecs(result.data.draft);
         toast.success('Draft generated successfully! Please review and edit as needed.');
       } else {
-        toast.error(result.error || 'Failed to generate draft');
+        toast.error('Failed to generate draft');
       }
     } catch (error) {
       console.error('Error generating AI draft:', error);
@@ -183,7 +188,7 @@ export function SplitViewClinicalForm({
     try {
       const result = await submitClinicalReview(
         screeningId, 
-        '', // Empty notes for backward compatibility (we use separate params)
+        `${internalNotes}\n\nParent Recommendations:\n${parentRecs}`, // Combine notes
         riskLevel,
         clinicalScores.social !== null || clinicalScores.fineMotor !== null || 
         clinicalScores.language !== null || clinicalScores.grossMotor !== null ? {
@@ -192,9 +197,7 @@ export function SplitViewClinicalForm({
           language_clinical: clinicalScores.language ?? undefined,
           gross_motor_clinical: clinicalScores.grossMotor ?? undefined,
         } : undefined,
-        selectedDiagnosis ? getDiagnosisTemplate(selectedDiagnosis)?.label : undefined,
-        internalNotes, // Separate internal notes
-        parentRecs // Separate parent recommendations
+        selectedDiagnosis ? getDiagnosisTemplate(selectedDiagnosis)?.name : undefined
       );
 
       if (result.success) {
@@ -366,29 +369,27 @@ export function SplitViewClinicalForm({
                 <Label className="text-xs font-semibold text-slate-700">
                   Diagnosis Template <span className="text-xs font-normal text-slate-500">(Optional)</span>
                 </Label>
-                <Select onValueChange={setSelectedDiagnosis} value={selectedDiagnosis} disabled={isSubmitting}>
-                  <SelectTrigger className="h-9 text-xs border-slate-200">
-                    <SelectValue placeholder="Select template..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DIAGNOSIS_TEMPLATES.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>
-                        <div className="flex flex-col text-left">
-                          <span className="text-xs font-medium">{t.label}</span>
-                          <span className="text-[10px] text-slate-500">{t.description}</span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <select 
+                  onChange={(e) => setSelectedDiagnosis(e.target.value)}
+                  value={selectedDiagnosis}
+                  disabled={isSubmitting}
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 border-slate-200"
+                >
+                  <option value="">Select template...</option>
+                  {DIAGNOSIS_TEMPLATES.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} - {t.description}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Referral Quick-Actions */}
-              {selectedDiagnosis && getReferralCenters(selectedDiagnosis).length > 0 && (
+              {selectedDiagnosis && getReferralCenters().length > 0 && (
                 <div className="p-2 bg-blue-50 rounded border border-blue-100">
                   <p className="text-[10px] font-medium text-blue-700 mb-1.5">Quick Add Referrals:</p>
                   <div className="flex flex-wrap gap-1">
-                    {getReferralCenters(selectedDiagnosis).map((center, i) => (
+                    {getReferralCenters().map((center, i) => (
                       <Button 
                         key={i}
                         type="button"
@@ -396,7 +397,7 @@ export function SplitViewClinicalForm({
                         size="sm" 
                         className="text-[10px] h-6 px-2 bg-white border-blue-200 hover:bg-blue-50"
                         onClick={() => {
-                          const referralText = formatReferralRecommendation(center);
+                          const referralText = formatReferralRecommendation(center, 'Developmental assessment');
                           setParentRecs(prev => {
                             if (prev.includes(center.name)) {
                               toast.info('Already added');

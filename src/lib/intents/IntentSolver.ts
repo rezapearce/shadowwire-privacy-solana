@@ -2,6 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 import { PaymentIntent, IntentStatus } from '@/types';
 import { signWithMPC } from '@/lib/zenrock/mpc';
 import { Connection, PublicKey, LAMPORTS_PER_SOL, ParsedTransaction } from '@solana/web3.js';
+import { USD1_CONFIG, PRIVACY_TX_CONFIG, PRIVACY_FLOW, USD1_MINT_ADDRESS } from '@/config/privacy-client';
+import { PrivacyService } from '@/lib/server/privacy-service';
 
 /**
  * IntentSolver - Singleton service for processing payment intents
@@ -21,6 +23,7 @@ export class IntentSolver {
 
   // Solana connection
   private readonly solanaConnection: Connection;
+  private readonly privacyService: PrivacyService;
   
   // Supabase admin client (bypasses RLS)
   private getSupabaseAdmin() {
@@ -55,6 +58,10 @@ export class IntentSolver {
     const rpcEndpoint = process.env.NEXT_PUBLIC_SOLANA_RPC_ENDPOINT || 'https://api.devnet.solana.com';
     console.log(`Initializing Solana connection to: ${rpcEndpoint}`);
     this.solanaConnection = new Connection(rpcEndpoint, 'confirmed');
+    
+    // Initialize Privacy Service for ShadowWire operations
+    this.privacyService = PrivacyService.getInstance();
+    console.log('Privacy Service initialized for ShadowWire operations');
   }
 
   /**
@@ -296,27 +303,66 @@ export class IntentSolver {
 
   /**
    * Handle SHIELDING status -> transition to SETTLED
-   * Simulates MPC delay by waiting before settling
+   * Execute ShadowWire privacy flow: Deposit → Private Transfer
    */
   private async handleShielding(intent: PaymentIntent): Promise<void> {
     console.log(`Processing intent ${intent.intent_id}: SHIELDING -> SETTLED`);
     
-    // Simulate MPC delay - wait 3-5 seconds before settling
-    // This gives users time to see the "Shielding..." status
-    const delayMs = 3000 + Math.random() * 2000; // 3-5 seconds
-    console.log(`Simulating MPC delay of ${delayMs.toFixed(0)}ms for intent ${intent.intent_id}`);
-    await new Promise((resolve) => setTimeout(resolve, delayMs));
-    
-    // Generate mock transaction hash (for logging only, not stored in DB)
-    const mockTxHash = `0x${Array.from({ length: 64 }, () => 
-      Math.floor(Math.random() * 16).toString(16)
-    ).join('')}`;
-    console.log(`[IntentSolver] Generated transaction hash: ${mockTxHash} (not stored in DB)`);
-    
-    // Update status to SETTLED (without tx_hash since column doesn't exist)
-    await this.setIntentStatus(intent.intent_id, 'SETTLED');
-    
-    console.log(`Intent ${intent.intent_id} successfully settled`);
+    try {
+      // Find parent wallet to get wallet address
+      const wallet = await this.findParentWallet(intent.family_id);
+      if (!wallet) {
+        throw new Error('Parent wallet not found for privacy transfer');
+      }
+
+      // Get the parent profile to find wallet address
+      const supabaseAdmin = this.getSupabaseAdmin();
+      const { data: parentProfile } = await supabaseAdmin
+        .from('profiles')
+        .select('wallet_address')
+        .eq('family_id', intent.family_id)
+        .eq('role', 'parent')
+        .limit(1)
+        .single();
+
+      if (!parentProfile?.wallet_address) {
+        throw new Error('Parent wallet address not found');
+      }
+
+      // Calculate amount in USD1 (convert from IDR)
+      const usdAmount = intent.fiat_amount / IntentSolver.IDR_TO_USD_RATE;
+      const amountInSmallestUnit = Math.floor(usdAmount * Math.pow(10, USD1_CONFIG.decimals));
+
+      // Check minimum privacy amount
+      if (amountInSmallestUnit < PRIVACY_TX_CONFIG.minPrivacyAmount) {
+        throw new Error(`Amount below minimum privacy threshold: ${PRIVACY_TX_CONFIG.minPrivacyAmount / Math.pow(10, USD1_CONFIG.decimals)} USD1`);
+      }
+
+      console.log(`Starting ShadowWire privacy flow: ${amountInSmallestUnit} USD1`);
+      
+      // Phase 1: Deposit USD1 to ShadowWire private pool
+      console.log(`Phase 1: Depositing USD1 to private pool...`);
+      const privacyResult = await this.privacyService.executePrivacyTransfer({
+        walletAddress: parentProfile.wallet_address,
+        amount: amountInSmallestUnit,
+      });
+
+      if (!privacyResult.success) {
+        throw new Error(privacyResult.error || 'ShadowWire privacy transfer failed');
+      }
+
+      console.log(`Privacy transfer completed: ${privacyResult.txSignature}`);
+      console.log(`Proof PDA: ${privacyResult.proofPda}`);
+      console.log(`All phases executed successfully by PrivacyService`);
+      
+      // Update status to SETTLED
+      await this.setIntentStatus(intent.intent_id, 'SETTLED');
+      
+      console.log(`Intent ${intent.intent_id} successfully settled with ShadowWire privacy`);
+    } catch (error) {
+      console.error(`ShadowWire privacy flow failed for intent ${intent.intent_id}:`, error);
+      throw error;
+    }
   }
 
   /**
