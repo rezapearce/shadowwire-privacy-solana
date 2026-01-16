@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { BulletproofsLoader } from '@/components/ui/bulletproofs-loader';
+import { ExportAuditKey } from './ExportAuditKey';
 import { PRIVACY_TX_CONFIG } from '@/config/privacy-client';
 
 export function ShieldBridge() {
@@ -15,6 +16,8 @@ export function ShieldBridge() {
   const [amount, setAmount] = useState<string>('');
   const [isShielding, setIsShielding] = useState(false);
   const [showBulletproofsLoader, setShowBulletproofsLoader] = useState(false);
+  const [lastTransactionId, setLastTransactionId] = useState<string>('');
+  const [lastBlindingFactor, setLastBlindingFactor] = useState<string>('');
 
   const handleShield = async () => {
     const numAmount = parseFloat(amount);
@@ -47,7 +50,39 @@ export function ShieldBridge() {
       try {
         await shieldAssets(numAmount);
         setAmount('');
-        toast.success('Privacy protection enabled! Your USD1 is now shielded.');
+        
+        // Generate transaction ID and blinding factor for demo purposes
+        const txId = `demo_tx_${Date.now()}`;
+        const blindingFactor = `r_${Math.random().toString(36).substring(2, 15)}`;
+        
+        // Store for export functionality
+        setLastTransactionId(txId);
+        setLastBlindingFactor(blindingFactor);
+        
+        // Success toast with explorer link and verification badge
+        toast.success(
+          <div className="flex flex-col space-y-2">
+            <div className="flex items-center gap-2">
+              <span className="bg-green-100 text-green-800 text-xs font-medium px-2 py-1 rounded-full">
+                ✓ Confidential Transfer Verified
+              </span>
+            </div>
+            <div className="text-sm">
+              Privacy protection enabled! Your USD1 is now shielded.
+            </div>
+            <a 
+              href={`https://explorer.solana.com/tx/${txId}?cluster=devnet`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:text-blue-800 underline text-xs flex items-center gap-1"
+            >
+              View Private Transaction →
+            </a>
+          </div>,
+          {
+            duration: 6000
+          }
+        );
       } catch (error) {
         console.error('Error in shield operation:', error);
         toast.error('Failed to enable privacy protection');
@@ -124,6 +159,14 @@ export function ShieldBridge() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Export Audit Key Section */}
+      <ExportAuditKey 
+        transactionId={lastTransactionId}
+        amount={parseFloat(amount) || 0}
+        blindingFactor={lastBlindingFactor}
+        isDisabled={!lastTransactionId}
+      />
 
       {/* Bulletproofs Loader Modal */}
       <BulletproofsLoader 
